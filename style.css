@@ -1,4 +1,8 @@
+/* ===== テーマ（ライト / ダーク 手動切替） =====
+   OSのダークモード設定には追従しない。
+   <html data-theme="dark"> 属性でダークモード化する。*/
 :root {
+    color-scheme: light;
     --bg-color: #fff8fa;
     --sidebar-bg: rgba(255, 240, 245, 0.85);
     --card-bg: #ffffff;
@@ -23,19 +27,42 @@
     --gradient-accent: linear-gradient(135deg, #0d9488, #2dd4bf);
 }
 
-@media (prefers-color-scheme: dark) {
-    :root {
-        --bg-color: #0f0a12;
-        --sidebar-bg: rgba(20, 12, 24, 0.9);
-        --card-bg: #1a1020;
-        --text-main: #f5f0f8;
-        --text-sec: #a78bfa;
-        --border: #2d1f3a;
-        --border-strong: #4a2d5e;
-        --row-hover: #241830;
-        --input-bg: #1e1428;
-        --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.3);
-    }
+html[data-theme="dark"] {
+    color-scheme: dark;
+    --bg-color: #0f0a12;
+    --sidebar-bg: rgba(20, 12, 24, 0.9);
+    --card-bg: #1a1020;
+    --text-main: #f5f0f8;
+    --text-sec: #a78bfa;
+    --accent: #f472b6;
+    --accent-hover: #ec4899;
+    --accent-light: rgba(244, 114, 182, 0.18);
+    --secondary: #2dd4bf;
+    --border: #2d1f3a;
+    --border-strong: #4a2d5e;
+    --row-hover: #241830;
+    --danger: #f87171;
+    --success: #34d399;
+    --input-bg: #1e1428;
+    --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.35);
+    --gradient-primary: linear-gradient(135deg, #f472b6, #c026d3);
+    --gradient-accent: linear-gradient(135deg, #2dd4bf, #14b8a6);
+}
+
+/* テーマ切替ボタン */
+.theme-toggle-btn {
+    background: none;
+    border: none;
+    font-size: 22px;
+    cursor: pointer;
+    padding: 6px 8px;
+    border-radius: 8px;
+    line-height: 1;
+    color: var(--text-main);
+    transition: background-color 0.15s;
+}
+.theme-toggle-btn:hover {
+    background-color: var(--row-hover);
 }
 
 * {

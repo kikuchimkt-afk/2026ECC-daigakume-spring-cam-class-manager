@@ -83,8 +83,31 @@ function init() {
     if (savedNewIds) {
         newParticipantIds = new Set(JSON.parse(savedNewIds));
     }
+    // テーマトグルのアイコンを初期化
+    updateThemeIcon();
     loadData();
     renderSidebar();
+}
+
+// ====== テーマ切替（ライト / ダーク） ======
+function toggleTheme() {
+    const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+    const next = current === 'dark' ? 'light' : 'dark';
+    if (next === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
+        document.documentElement.removeAttribute('data-theme');
+    }
+    try { localStorage.setItem('eikenTheme', next); } catch (e) {}
+    updateThemeIcon();
+}
+
+function updateThemeIcon() {
+    const btn = document.getElementById('themeToggleBtn');
+    if (!btn) return;
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    btn.textContent = isDark ? '☀️' : '🌙';
+    btn.title = isDark ? 'ライトモードに切り替え' : 'ダークモードに切り替え';
 }
 
 // アプリ初期化・データ同期
