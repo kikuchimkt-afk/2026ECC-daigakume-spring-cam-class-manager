@@ -342,6 +342,12 @@ select, input[type="text"], textarea {
     outline: none;
 }
 
+/* テーブル内のプルダウン展開時のオプション文字色を確保（Windowsの自動ダーク化対策） */
+.data-table select option {
+    background-color: var(--card-bg);
+    color: var(--text-main);
+}
+
 select:focus, input[type="text"]:focus, textarea:focus {
     border-color: var(--accent);
     box-shadow: 0 0 0 3px rgba(232, 67, 147, 0.12);

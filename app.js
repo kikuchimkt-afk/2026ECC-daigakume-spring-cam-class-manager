@@ -43,9 +43,19 @@ function getPastPaperOptions(grade) {
     return options.join('\n');
 }
 
-// ★ 受験級ごとのカラーマッピング
+// ★ 受験級ごとのカラーマッピング（ライト/ダーク両対応）
 function getGradeColor(grade) {
-    const colors = {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const colors = isDark ? {
+        '5級': '#60a5fa',         // 明るい青
+        '4級': '#34d399',         // 明るい緑
+        '3級': '#fbbf24',         // 明るいオレンジ
+        '準2級': '#f472b6',       // 明るいピンク
+        '準2級プラス': '#e879f9', // 明るいマゼンタ
+        '2級': '#a78bfa',         // 明るい紫
+        '準1級': '#f87171',       // 明るい赤
+        '1級': '#fb7185',         // 明るいローズ
+    } : {
         '5級': '#3b82f6',    // 青
         '4級': '#10b981',    // 緑
         '3級': '#f59e0b',    // オレンジ
@@ -100,6 +110,10 @@ function toggleTheme() {
     }
     try { localStorage.setItem('eikenTheme', next); } catch (e) {}
     updateThemeIcon();
+    // ★ 受験級の色分けもテーマに合わせて再描画
+    if (currentSessionId && hasRendered) {
+        renderMainContent();
+    }
 }
 
 function updateThemeIcon() {
@@ -823,7 +837,7 @@ function renderMainContent() {
                 <input type="text" value="${p.schoolYear || ''}" onchange="updateParticipantInfo('${p.id}', 'schoolYear', this.value)" style="width: 55px; text-align: center; border: 1px solid var(--border-color); border-radius: 4px; padding: 4px; font-size: 0.9em;">
             </td>
             <td>
-                <select onchange="updateParticipantInfo('${p.id}', 'grade', this.value)" style="width: 75px; padding: 4px; border: 1px solid ${getGradeColor(p.grade)}; border-radius: 4px; background: ${getGradeColor(p.grade)}18; color: ${getGradeColor(p.grade)}; font-weight: 700;">
+                <select onchange="updateParticipantInfo('${p.id}', 'grade', this.value)" style="width: 75px; padding: 4px; border: 1.5px solid ${getGradeColor(p.grade)}; border-radius: 4px; background-color: ${getGradeColor(p.grade)}33; color: ${getGradeColor(p.grade)}; font-weight: 700; appearance: none; -webkit-appearance: none; -moz-appearance: none;">
                     ${['1級', '準1級', '2級', '準2級プラス', '準2級', '3級', '4級', '5級'].map(g => `<option value="${g}" ${p.grade === g ? 'selected' : ''}>${g}</option>`).join('')}
                 </select>
             </td>
