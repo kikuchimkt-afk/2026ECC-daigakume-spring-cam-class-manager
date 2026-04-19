@@ -118,94 +118,52 @@ async function syncWithCloud() {
         const response = await fetch(GAS_WEB_APP_URL);
         const data = await response.json();
         
-        // ★ 1. まずクラウドの成績データを先にマージ（空でないもののみ）
+        // ★ 1. クラウドの成績データをフル上書き（クラウド優先）
         if (data.appData && Object.keys(data.appData).length > 0) {
-            Object.keys(data.appData).forEach(sessionId => {
-                if (appData[sessionId]) {
-                    const cloudSession = data.appData[sessionId];
-                    // 参加者データがある場合のみ上書き
-                    if (cloudSession.participants && Object.keys(cloudSession.participants).length > 0) {
-                        appData[sessionId] = cloudSession;
-                    } else {
-                        // 参加者以外のフィールド（宿題・メモ）だけ反映
-                        appData[sessionId].generalHomework = cloudSession.generalHomework || appData[sessionId].generalHomework;
-                        appData[sessionId].generalNotes = cloudSession.generalNotes || appData[sessionId].generalNotes;
-                    }
-                }
-            });
+            appData = data.appData;
         }
+        // 全セッションのエントリを保証
+        sessionsInfo.forEach(session => {
+            if (!appData[session.id]) {
+                appData[session.id] = { generalHomework: '', generalNotes: '', participants: {} };
+            }
+        });
         
-        // ★ 2. その後にフォーム回答を処理（新規参加者を追加）
+        // ★ 2. フォーム回答を処理（新規参加者を追加）
         newParticipantIds = new Set();
         if (data.formResponses && data.formResponses.length > 0) {
             processFormResponses(data.formResponses);
         }
         
-        // ★ 3. クラウドの旧ID(p_ext_)データを新ID(p_form_)にマイグレーション
+        // ★ 3. 旧ID(p_ext_)データの新ID(p_form_)マイグレーション
         if (data.appData && Object.keys(data.appData).length > 0) {
-            // 名前→新IDのマッピングを作成
             const nameToNewId = {};
             participantsList.forEach(p => { nameToNewId[p.name] = p.id; });
-            
-            // クラウドの旧IDから名前を逆引きするため、フォーム回答を使う
-            const oldIdToName = {};
-            if (data.formResponses) {
-                data.formResponses.forEach((row, i) => {
-                    const keys = Object.keys(row);
-                    const nameKey = keys.find(k => k.includes('氏名'));
-                    if (!nameKey) return;
-                    const rawName = String(row[nameKey] || '');
-                    if (!rawName.trim()) return;
-                    const name = rawName.replace(/[\s　]+/g, ' ');
-                    // 旧IDの生成ロジックを再現（これらすべてのパターンを試す）
-                    oldIdToName[`p_ext_${i}`] = name; // indexパターン
-                });
-            }
             
             Object.keys(data.appData).forEach(sessionId => {
                 const cloudParticipants = data.appData[sessionId]?.participants || {};
                 Object.keys(cloudParticipants).forEach(oldId => {
                     if (!oldId.startsWith('p_ext_')) return;
                     const pData = cloudParticipants[oldId];
-                    // このIDに成績データがあるか
                     if (!pData.rpContent && !pData.apContent && !pData.rpScore && !pData.apScore && !pData.remarks) return;
                     
-                    // 名前で照合：participantsListから旧IDを持つ参加者を探す
-                    // （クラウドのparticipantsListにも旧IDがあるかもしれない）
-                    let matchedName = null;
-                    
-                    // 方法1: 全participantsListを走査して名前マッチング
-                    for (const name in nameToNewId) {
-                        const newId = nameToNewId[name];
-                        if (newId === oldId) { matchedName = name; break; }
-                    }
-                    
-                    // 方法2: 旧IDの末尾のindexからフォーム行を特定
-                    if (!matchedName) {
-                        const match = oldId.match(/_(\d+)$/);
-                        if (match && data.formResponses) {
-                            const idx = parseInt(match[1]);
-                            if (idx < data.formResponses.length) {
-                                const row = data.formResponses[idx];
-                                const nameKey = Object.keys(row).find(k => k.includes('氏名'));
-                                if (nameKey) {
-                                    const rawName = String(row[nameKey] || '').replace(/[\s　]+/g, ' ');
-                                    if (rawName && nameToNewId[rawName]) {
-                                        matchedName = rawName;
+                    // フォーム行インデックスから名前を特定
+                    const match = oldId.match(/_(\d+)$/);
+                    if (match && data.formResponses) {
+                        const idx = parseInt(match[1]);
+                        if (idx < data.formResponses.length) {
+                            const row = data.formResponses[idx];
+                            const nameKey = Object.keys(row).find(k => k.includes('氏名'));
+                            if (nameKey) {
+                                const rawName = String(row[nameKey] || '').replace(/[\s　]+/g, ' ');
+                                const newId = nameToNewId[rawName];
+                                if (newId && newId !== oldId) {
+                                    if (!appData[sessionId]) appData[sessionId] = { generalHomework: '', generalNotes: '', participants: {} };
+                                    if (!appData[sessionId].participants[newId] || 
+                                        (!appData[sessionId].participants[newId].rpContent && !appData[sessionId].participants[newId].apContent)) {
+                                        appData[sessionId].participants[newId] = pData;
                                     }
                                 }
-                            }
-                        }
-                    }
-                    
-                    if (matchedName) {
-                        const newId = nameToNewId[matchedName];
-                        if (newId && newId !== oldId) {
-                            // 新IDにデータをマイグレーション（既存データがなければ）
-                            if (!appData[sessionId]) appData[sessionId] = { generalHomework: '', generalNotes: '', participants: {} };
-                            if (!appData[sessionId].participants[newId] || 
-                                (!appData[sessionId].participants[newId].rpContent && !appData[sessionId].participants[newId].apContent)) {
-                                appData[sessionId].participants[newId] = pData;
                             }
                         }
                     }
@@ -225,12 +183,13 @@ async function syncWithCloud() {
             }
         });
         
-        // 新規参加者がいれば通知を表示し、localStorageに保存
+        // 新規参加者がいれば通知を表示
         if (newParticipantIds.size > 0) {
             showNotification(`🆕 新しい申し込みが ${newParticipantIds.size} 件あります！`);
             localStorage.setItem('eikenDaigakumaeNewIds', JSON.stringify([...newParticipantIds]));
         }
         
+        // ★ ローカルにも最新データを保存
         localStorage.setItem('eikenDaigakumaeData', JSON.stringify(appData));
         localStorage.setItem('eikenDaigakumaeParticipants', JSON.stringify(participantsList));
         
@@ -244,7 +203,6 @@ async function syncWithCloud() {
         }
     } catch(e) {
         console.error("クラウド同期エラー:", e);
-        // エラーでも起動は続行（オフラインモード）
     } finally {
         hideLoading();
     }
