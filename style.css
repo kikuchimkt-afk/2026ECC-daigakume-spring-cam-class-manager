@@ -1,33 +1,40 @@
 :root {
-    --bg-color: #f5f5f7;
-    --sidebar-bg: rgba(255, 255, 255, 0.7);
+    --bg-color: #fff8fa;
+    --sidebar-bg: rgba(255, 240, 245, 0.85);
     --card-bg: #ffffff;
-    --text-main: #1d1d1f;
-    --text-sec: #86868b;
-    --accent: #007aff;
-    --accent-hover: #005bb5;
-    --border: #d2d2d7;
-    --row-hover: #f5f5f7;
-    --danger: #ff3b30;
-    --success: #34c759;
-    --input-bg: #f5f5f7;
+    --text-main: #1e293b;
+    --text-sec: #94a3b8;
+    --accent: #e84393;
+    --accent-hover: #d63384;
+    --accent-light: rgba(232, 67, 147, 0.1);
+    --secondary: #0d9488;
+    --border: #fce7f3;
+    --border-strong: #f9a8d4;
+    --row-hover: #fff0f5;
+    --danger: #ef4444;
+    --success: #10b981;
+    --input-bg: #fef7f0;
     --font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     --radius-lg: 16px;
     --radius-md: 10px;
     --radius-sm: 6px;
-    --shadow-soft: 0 4px 16px rgba(0, 0, 0, 0.04);
+    --shadow-soft: 0 4px 20px rgba(232, 67, 147, 0.06);
+    --gradient-primary: linear-gradient(135deg, #e84393, #f472b6);
+    --gradient-accent: linear-gradient(135deg, #0d9488, #2dd4bf);
 }
 
 @media (prefers-color-scheme: dark) {
     :root {
-        --bg-color: #000000;
-        --sidebar-bg: rgba(28, 28, 30, 0.7);
-        --card-bg: #1c1c1e;
-        --text-main: #f5f5f7;
-        --text-sec: #a1a1a6;
-        --border: #38383a;
-        --row-hover: #2c2c2e;
-        --input-bg: #2c2c2e;
+        --bg-color: #0f0a12;
+        --sidebar-bg: rgba(20, 12, 24, 0.9);
+        --card-bg: #1a1020;
+        --text-main: #f5f0f8;
+        --text-sec: #a78bfa;
+        --border: #2d1f3a;
+        --border-strong: #4a2d5e;
+        --row-hover: #241830;
+        --input-bg: #1e1428;
+        --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.3);
     }
 }
 
@@ -42,7 +49,7 @@ body {
     background-color: var(--bg-color);
     color: var(--text-main);
     line-height: 1.5;
-    overflow: hidden; /* App feel */
+    overflow: hidden;
     -webkit-font-smoothing: antialiased;
 }
 
@@ -52,7 +59,7 @@ body {
     width: 100vw;
 }
 
-/* Sidebar */
+/* ===== Sidebar ===== */
 .sidebar {
     width: 260px;
     min-width: 260px;
@@ -72,14 +79,18 @@ body {
 
 .sidebar-header {
     padding: 24px 20px 12px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 8px;
 }
 
 .sidebar-header h2 {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-sec);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    font-size: 16px;
+    font-weight: 800;
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: 0.02em;
 }
 
 .date-list {
@@ -89,23 +100,28 @@ body {
 }
 
 .date-list li {
-    padding: 12px 16px;
-    margin-bottom: 4px;
+    padding: 10px 14px;
+    margin-bottom: 3px;
     border-radius: var(--radius-md);
     cursor: pointer;
     transition: all 0.2s ease;
     display: flex;
     align-items: center;
     font-weight: 500;
+    font-size: 14px;
+    border: 1px solid transparent;
 }
 
 .date-list li:hover {
     background-color: var(--row-hover);
+    border-color: var(--border);
 }
 
 .date-list li.active {
-    background-color: var(--accent);
+    background: var(--gradient-primary);
     color: white;
+    border-color: transparent;
+    box-shadow: 0 4px 16px rgba(232, 67, 147, 0.3);
 }
 
 .date-list li.active .date-subtitle {
@@ -113,7 +129,7 @@ body {
 }
 
 .date-title {
-    font-size: 16px;
+    font-size: 14px;
     display: block;
 }
 
@@ -124,7 +140,7 @@ body {
     display: block;
 }
 
-/* Main Content */
+/* ===== Main Content ===== */
 .main-content {
     flex: 1;
     display: flex;
@@ -133,7 +149,7 @@ body {
 }
 
 .main-header {
-    padding: 24px 40px;
+    padding: 20px 40px;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -152,14 +168,15 @@ body {
 }
 
 .header-info h1 {
-    font-size: 28px;
-    font-weight: 700;
+    font-size: 26px;
+    font-weight: 800;
     margin-bottom: 4px;
+    color: var(--text-main);
 }
 
 .header-info .subtitle {
     color: var(--text-sec);
-    font-size: 14px;
+    font-size: 13px;
 }
 
 .header-actions {
@@ -170,9 +187,10 @@ body {
 
 .save-status {
     font-size: 13px;
-    color: var(--text-sec);
+    color: var(--secondary);
     opacity: 0;
     transition: opacity 0.3s;
+    font-weight: 600;
 }
 
 .save-status.show {
@@ -190,13 +208,15 @@ body {
 }
 
 .primary-btn {
-    background-color: var(--accent);
+    background: var(--gradient-primary);
     color: white;
+    border: none;
 }
 
 .primary-btn:hover {
-    background-color: var(--accent-hover);
+    filter: brightness(1.1);
     transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(232, 67, 147, 0.3);
 }
 
 .content-scrollable {
@@ -206,7 +226,7 @@ body {
     padding-bottom: 80px;
 }
 
-/* Cards */
+/* ===== Cards ===== */
 .card {
     background: var(--card-bg);
     border-radius: var(--radius-lg);
@@ -217,28 +237,30 @@ body {
 }
 
 .card-header {
-    padding: 20px 24px;
+    padding: 18px 24px;
     border-bottom: 1px solid var(--border);
     display: flex;
     justify-content: space-between;
     align-items: center;
+    background: linear-gradient(135deg, rgba(232, 67, 147, 0.03), rgba(13, 148, 136, 0.03));
 }
 
 .card-header h3 {
-    font-size: 18px;
-    font-weight: 600;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text-main);
 }
 
 .badge {
-    background: var(--input-bg);
-    padding: 4px 10px;
+    background: var(--accent-light);
+    padding: 4px 12px;
     border-radius: 12px;
     font-size: 12px;
-    font-weight: 600;
-    color: var(--text-sec);
+    font-weight: 700;
+    color: var(--accent);
 }
 
-/* Table */
+/* ===== Table ===== */
 .table-container {
     overflow-x: auto;
 }
@@ -251,15 +273,17 @@ body {
 
 .data-table th {
     padding: 12px 16px;
-    font-size: 13px;
+    font-size: 12px;
     color: var(--text-sec);
-    font-weight: 500;
+    font-weight: 600;
     border-bottom: 1px solid var(--border);
     white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
 }
 
 .data-table td {
-    padding: 16px;
+    padding: 14px 16px;
     border-bottom: 1px solid var(--border);
     font-size: 14px;
     vertical-align: middle;
@@ -277,7 +301,7 @@ body {
     background-color: var(--row-hover);
 }
 
-/* Form Controls */
+/* ===== Form Controls ===== */
 select, input[type="text"], textarea {
     width: 100%;
     padding: 8px 12px;
@@ -293,14 +317,14 @@ select, input[type="text"], textarea {
 
 select:focus, input[type="text"]:focus, textarea:focus {
     border-color: var(--accent);
-    box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.2);
+    box-shadow: 0 0 0 3px rgba(232, 67, 147, 0.12);
 }
 
 textarea {
     resize: vertical;
 }
 
-/* Toggle Switch */
+/* ===== Toggle Switch ===== */
 .toggle-switch {
     position: relative;
     display: inline-block;
@@ -318,7 +342,7 @@ textarea {
     position: absolute;
     cursor: pointer;
     top: 0; left: 0; right: 0; bottom: 0;
-    background-color: var(--border);
+    background-color: var(--border-strong);
     transition: .3s;
     border-radius: 24px;
 }
@@ -333,11 +357,11 @@ textarea {
     background-color: white;
     transition: .3s;
     border-radius: 50%;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
 }
 
 input:checked + .slider {
-    background-color: var(--success);
+    background: var(--gradient-accent);
 }
 
 input:checked + .slider:before {
@@ -350,7 +374,7 @@ input:checked + .slider:before {
     vertical-align: super;
 }
 
-/* General Layout helpers */
+/* ===== Form Layout ===== */
 .form-grid {
     padding: 24px;
     display: grid;
@@ -361,12 +385,12 @@ input:checked + .slider:before {
 .form-group label {
     display: block;
     font-size: 13px;
-    font-weight: 500;
-    color: var(--text-sec);
+    font-weight: 600;
+    color: var(--accent);
     margin-bottom: 8px;
 }
 
-/* Empty State */
+/* ===== Empty State ===== */
 .empty-state {
     display: flex;
     flex-direction: column;
@@ -377,26 +401,30 @@ input:checked + .slider:before {
 }
 
 .empty-icon {
-    font-size: 48px;
+    font-size: 56px;
     margin-bottom: 16px;
-    opacity: 0.8;
+    filter: drop-shadow(0 4px 12px rgba(232, 67, 147, 0.2));
 }
 
 .empty-state h2 {
-    font-size: 20px;
+    font-size: 22px;
     margin-bottom: 8px;
-    color: var(--text-main);
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-weight: 800;
 }
 
 .empty-state p {
     font-size: 14px;
 }
 
-/* Small adjustments */
+/* ===== Tablet Badge ===== */
 .tablet-badge {
     display: inline-block;
     padding: 4px 8px;
-    background: rgba(0, 122, 255, 0.1);
+    background: var(--accent-light);
     color: var(--accent);
     border-radius: var(--radius-sm);
     font-size: 11px;
@@ -407,13 +435,13 @@ input:checked + .slider:before {
     color: var(--text-sec);
 }
 
-/* Modal */
+/* ===== Modal ===== */
 .modal-overlay {
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(5px);
-    -webkit-backdrop-filter: blur(5px);
+    background: rgba(15, 10, 18, 0.5);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     z-index: 999;
     align-items: center;
     justify-content: center;
@@ -425,7 +453,7 @@ input:checked + .slider:before {
     max-width: 400px;
     padding: 24px;
     border-radius: var(--radius-lg);
-    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    box-shadow: 0 10px 50px rgba(232, 67, 147, 0.15);
     border: 1px solid var(--border);
     animation: slideUp 0.3s cubic-bezier(0.25, 1, 0.5, 1);
 }
@@ -435,7 +463,7 @@ input:checked + .slider:before {
     to { transform: translateY(0); opacity: 1; }
 }
 
-/* Loading Overlay */
+/* ===== Loading Overlay ===== */
 .loading-overlay {
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
@@ -452,7 +480,7 @@ input:checked + .slider:before {
 .spinner {
     width: 40px;
     height: 40px;
-    border: 4px solid var(--border);
+    border: 4px solid var(--border-strong);
     border-top: 4px solid var(--accent);
     border-radius: 50%;
     animation: spin 1s linear infinite;
@@ -460,22 +488,22 @@ input:checked + .slider:before {
 }
 .loading-text {
     font-size: 16px;
-    font-weight: 600;
-    color: var(--text-main);
+    font-weight: 700;
+    color: var(--accent);
 }
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
 
-/* 新規申し込み通知バナー */
+/* ===== Notification Banner ===== */
 .notification-banner {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     z-index: 5000;
-    background: linear-gradient(135deg, #007aff, #5856d6);
+    background: var(--gradient-primary);
     color: white;
     padding: 14px 24px;
     display: flex;
@@ -483,7 +511,7 @@ input:checked + .slider:before {
     justify-content: space-between;
     font-size: 14px;
     font-weight: 600;
-    box-shadow: 0 4px 20px rgba(0,122,255,0.3);
+    box-shadow: 0 4px 24px rgba(232, 67, 147, 0.35);
     transform: translateY(-100%);
     transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
 }
@@ -510,10 +538,10 @@ input:checked + .slider:before {
     background: rgba(255,255,255,0.4);
 }
 
-/* Newバッジ */
+/* ===== NEW Badge ===== */
 .badge-new {
     display: inline-block;
-    background: linear-gradient(135deg, #ff3b30, #ff6b6b);
+    background: var(--gradient-primary);
     color: white;
     font-size: 10px;
     font-weight: 700;
@@ -529,7 +557,7 @@ input:checked + .slider:before {
     50% { opacity: 0.7; }
 }
 
-/* 日程追加ボタン */
+/* ===== Add Session Button ===== */
 .add-session-btn {
     display: flex;
     align-items: center;
@@ -539,7 +567,7 @@ input:checked + .slider:before {
     margin: 8px 16px;
     padding: 10px;
     background: var(--input-bg);
-    border: 2px dashed var(--border);
+    border: 2px dashed var(--border-strong);
     border-radius: var(--radius-sm);
     color: var(--text-sec);
     font-size: 13px;
@@ -549,10 +577,10 @@ input:checked + .slider:before {
 .add-session-btn:hover {
     border-color: var(--accent);
     color: var(--accent);
-    background: rgba(0,122,255,0.05);
+    background: var(--accent-light);
 }
 
-/* 日程追加モーダル */
+/* ===== Session Modal Grid ===== */
 .session-modal-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -576,7 +604,7 @@ input:checked + .slider:before {
     color: var(--text-main);
 }
 
-/* 参加日程ポップアップ */
+/* ===== Schedule Popup ===== */
 .schedule-item {
     display: flex;
     align-items: center;
@@ -588,7 +616,7 @@ input:checked + .slider:before {
     transition: background 0.15s;
 }
 .schedule-item.registered {
-    background: rgba(52, 199, 89, 0.1);
+    background: rgba(16, 185, 129, 0.08);
     border-left: 3px solid var(--success);
 }
 .schedule-item.not-registered {
