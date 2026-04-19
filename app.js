@@ -311,9 +311,10 @@ function processFormResponses(formResponses) {
             participantsList.push(existing);
             newParticipantIds.add(existing.id); // 新規としてマーク
         } else {
-            existing.grade = grade;
-            existing.hasTablet = hasTablet;
-            existing.schoolYear = schoolYear;
+            // ★ 既存ユーザーの編集を上書きしない（未入力のときだけフォーム値で補完）
+            if (!existing.grade || existing.grade === '未選択') existing.grade = grade;
+            if (existing.hasTablet === undefined) existing.hasTablet = hasTablet;
+            if (!existing.schoolYear) existing.schoolYear = schoolYear;
         }
 
         // 参加希望日に応じて日誌に割り当てる
@@ -389,19 +390,27 @@ async function saveData() {
     const status = document.getElementById('saveStatus');
     status.textContent = 'クラウドへ保存中...';
     status.classList.add('show');
+    status.style.color = '';
 
     try {
-        await saveToCloud({
+        const result = await saveToCloud({
             appData: appData,
             participantsList: participantsList,
             sessionsInfo: sessionsInfo
         });
-        status.textContent = 'クラウドへ保存完了 ✓';
-        setTimeout(() => { status.classList.remove('show'); }, 3000);
+        if (result && result.status === 'success') {
+            status.textContent = `クラウドへ保存完了 ✓ (参加者${result.savedParticipantsCount ?? '-'}名)`;
+            status.style.color = '';
+        } else {
+            status.textContent = '保存されましたが検証未確認です';
+            status.style.color = '#f59e0b';
+        }
+        setTimeout(() => { status.classList.remove('show'); }, 4000);
     } catch (e) {
         console.error("クラウド保存エラー:", e);
-        status.textContent = '※オフライン保存のみ完了';
-        setTimeout(() => { status.classList.remove('show'); }, 3000);
+        status.textContent = '⚠ クラウド保存失敗: ' + (e.message || '不明');
+        status.style.color = '#dc2626';
+        setTimeout(() => { status.classList.remove('show'); }, 8000);
     }
 }
 
@@ -417,22 +426,30 @@ async function pushStateToCloud() {
     if (status) {
         status.textContent = 'クラウドへ保存中...';
         status.classList.add('show');
+        status.style.color = '';
     }
     try {
-        await saveToCloud({
+        const result = await saveToCloud({
             appData: appData,
             participantsList: participantsList,
             sessionsInfo: sessionsInfo
         });
         if (status) {
-            status.textContent = 'クラウドへ保存完了 ✓';
-            setTimeout(() => { status.classList.remove('show'); }, 2500);
+            if (result && result.status === 'success') {
+                status.textContent = `クラウドへ保存完了 ✓ (参加者${result.savedParticipantsCount ?? '-'}名)`;
+                status.style.color = '';
+            } else {
+                status.textContent = '保存されましたが検証未確認です';
+                status.style.color = '#f59e0b';
+            }
+            setTimeout(() => { status.classList.remove('show'); }, 3000);
         }
     } catch (e) {
         console.error("クラウド保存エラー:", e);
         if (status) {
-            status.textContent = '※オフライン保存のみ完了';
-            setTimeout(() => { status.classList.remove('show'); }, 3000);
+            status.textContent = '⚠ クラウド保存失敗: ' + (e.message || '不明');
+            status.style.color = '#dc2626';
+            setTimeout(() => { status.classList.remove('show'); }, 8000);
         }
     }
 }
@@ -447,31 +464,69 @@ function pushStateToCloudDebounced(delay) {
     }, delay || 800);
 }
 
-// フォーム＋隠しiframeでGASにPOST送信（CORS完全回避）
-function saveToCloud(payload) {
+// ★ GASへのPOST保存（fetch text/plain方式 → 成功/失敗を明確に検知）
+// GAS の Web App は text/plain Content-Type を受け付ける（CORSプリフライトを発生させないため）
+// レスポンスは不透明リダイレクト経由で取得できる。成功/失敗は JSON で返ってくる
+async function saveToCloud(payload) {
+    const jsonStr = JSON.stringify(payload);
+    console.log('[saveToCloud] 送信開始:', {
+        sessions: (payload.sessionsInfo || []).length,
+        participants: (payload.participantsList || []).length,
+        appDataKeys: Object.keys(payload.appData || {}).length,
+        jsonSizeKB: (jsonStr.length / 1024).toFixed(1)
+    });
+    let response, text;
+    try {
+        response = await fetch(GAS_WEB_APP_URL, {
+            method: 'POST',
+            mode: 'cors',
+            redirect: 'follow',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: jsonStr
+        });
+        text = await response.text();
+    } catch (netErr) {
+        console.error('[saveToCloud] ネットワークエラー:', netErr);
+        // fetch が CORS 等で失敗した場合、iframe フォールバックを試す
+        try {
+            await _saveToCloudViaIframe(payload);
+            console.warn('[saveToCloud] iframeフォールバックで送信完了（結果検証は GET 同期時に行います）');
+            return { status: 'success-unverified', via: 'iframe' };
+        } catch (fallbackErr) {
+            throw new Error('クラウドへ接続できません: ' + netErr.message);
+        }
+    }
+
+    let result;
+    try { result = JSON.parse(text); } catch (_) { result = { status: 'error', message: '無効なレスポンス: ' + (text || '').substring(0, 200) }; }
+    console.log('[saveToCloud] レスポンス:', result);
+
+    if (result.status !== 'success') {
+        throw new Error('クラウド保存失敗: ' + (result.message || 'unknown'));
+    }
+    return result;
+}
+
+// フォールバック: 隠しiframe経由のPOST（fetchでCORSに弾かれた場合用）
+function _saveToCloudViaIframe(payload) {
     return new Promise((resolve) => {
-        // 既存のiframe/formがあれば削除
         const oldIframe = document.getElementById('gas_save_frame');
         if (oldIframe) oldIframe.remove();
         const oldForm = document.getElementById('gas_save_form');
         if (oldForm) oldForm.remove();
 
-        // 隠しiframeを作成
         const iframe = document.createElement('iframe');
         iframe.id = 'gas_save_frame';
         iframe.name = 'gas_save_frame';
         iframe.style.display = 'none';
         document.body.appendChild(iframe);
 
-        // フォームを作成
         const form = document.createElement('form');
         form.id = 'gas_save_form';
         form.method = 'POST';
         form.action = GAS_WEB_APP_URL;
         form.target = 'gas_save_frame';
 
-        // ★ Base64エンコードで日本語の文字化けを完全回避
-        // payload は { appData, participantsList, sessionsInfo } の形式
         const jsonStr = JSON.stringify(payload);
         const utf8Bytes = new TextEncoder().encode(jsonStr);
         let binaryStr = '';
@@ -487,7 +542,6 @@ function saveToCloud(payload) {
         document.body.appendChild(form);
         form.submit();
 
-        // 送信完了後にクリーンアップ
         setTimeout(() => {
             iframe.remove();
             form.remove();
@@ -1051,6 +1105,82 @@ function downloadExcel() {
     const today = new Date();
     const fileName = `英検勉強会_日誌_${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}.xlsx`;
     XLSX.writeFile(wb, fileName);
+}
+
+// ====== 診断機能（同期確認用） ======
+async function diagnoseCloudSync() {
+    const lines = [];
+    lines.push('=== クラウド同期 診断レポート ===');
+    lines.push('時刻: ' + new Date().toLocaleString('ja-JP'));
+    lines.push('');
+
+    // 1. GET で現在のクラウド状態を取得
+    lines.push('【1】クラウドからのGET取得');
+    let getData = null;
+    try {
+        const url = GAS_WEB_APP_URL + (GAS_WEB_APP_URL.includes('?') ? '&' : '?') + 't=' + Date.now();
+        const res = await fetch(url, { cache: 'no-store' });
+        getData = await res.json();
+        lines.push('  ✓ GET成功 (HTTP ' + res.status + ')');
+        lines.push('  クラウドの最終更新: ' + (getData.lastUpdated || '(未保存)'));
+        if (getData._meta) {
+            lines.push('  保存用シート存在: ' + getData._meta.storageSheetExists);
+            lines.push('  参加者(クラウド): ' + getData._meta.participantsListCount + '名');
+            lines.push('  日程(クラウド): ' + getData._meta.sessionsInfoCount + '件');
+            lines.push('  日程データ(appData): ' + getData._meta.appDataSessionCount + 'セッション');
+        } else {
+            lines.push('  ⚠ _metaが無い → GAS旧バージョン(再デプロイ必須!)');
+        }
+        lines.push('  フォーム回答件数: ' + (getData.formResponses || []).length);
+    } catch (e) {
+        lines.push('  ✗ GET失敗: ' + e.message);
+    }
+    lines.push('');
+
+    // 2. 現在のローカル状態
+    lines.push('【2】このデバイスのローカル状態');
+    lines.push('  参加者(ローカル): ' + participantsList.length + '名');
+    lines.push('  日程(ローカル): ' + sessionsInfo.length + '件');
+    lines.push('  日程データ: ' + Object.keys(appData).length + 'セッション');
+    lines.push('');
+
+    // 3. テスト書き込み
+    lines.push('【3】テスト保存（現在の状態を送信）');
+    try {
+        const result = await saveToCloud({
+            appData: appData,
+            participantsList: participantsList,
+            sessionsInfo: sessionsInfo
+        });
+        lines.push('  ✓ POST成功: ' + JSON.stringify(result));
+    } catch (e) {
+        lines.push('  ✗ POST失敗: ' + e.message);
+    }
+    lines.push('');
+
+    // 4. 書き込み直後の再取得
+    lines.push('【4】書き込み後の再GET（書き込まれたか検証）');
+    try {
+        const url2 = GAS_WEB_APP_URL + '?t=' + Date.now();
+        const res2 = await fetch(url2, { cache: 'no-store' });
+        const after = await res2.json();
+        lines.push('  クラウドの最終更新: ' + (after.lastUpdated || '(未保存)'));
+        if (after._meta) {
+            lines.push('  参加者(クラウド): ' + after._meta.participantsListCount + '名');
+            lines.push('  日程(クラウド): ' + after._meta.sessionsInfoCount + '件');
+        }
+        const matchParticipants = after._meta && after._meta.participantsListCount === participantsList.length;
+        const matchSessions = after._meta && after._meta.sessionsInfoCount === sessionsInfo.length;
+        lines.push('  参加者数一致: ' + (matchParticipants ? '✓' : '✗'));
+        lines.push('  日程数一致: ' + (matchSessions ? '✓' : '✗'));
+    } catch (e) {
+        lines.push('  ✗ 再GET失敗: ' + e.message);
+    }
+
+    const report = lines.join('\n');
+    console.log(report);
+    alert(report);
+    return report;
 }
 
 // 起動
