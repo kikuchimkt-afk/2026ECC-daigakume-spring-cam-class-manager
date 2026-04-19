@@ -43,6 +43,21 @@ function getPastPaperOptions(grade) {
     return options.join('\n');
 }
 
+// ★ 受験級ごとのカラーマッピング
+function getGradeColor(grade) {
+    const colors = {
+        '5級': '#3b82f6',    // 青
+        '4級': '#10b981',    // 緑
+        '3級': '#f59e0b',    // オレンジ
+        '準2級': '#e84393',  // ピンク
+        '準2級プラス': '#d946ef', // マゼンタ
+        '2級': '#7c3aed',    // 紫
+        '準1級': '#dc2626',  // 深紅
+        '1級': '#991b1b',    // ダーク赤
+    };
+    return colors[grade] || '#94a3b8';
+}
+
 // ====== GAS Web API URL ======
 // ★★★ GASデプロイ後に取得したURLをここに貼り付けてください ★★★
 const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyFjUMbynTewZ4LR9jl4fUdtc8WNRh-_-UlhY771JZF-b9X_jAt4Ujah6l8cvozChE7aw/exec";
@@ -301,9 +316,8 @@ function processFormResponses(formResponses) {
         else if (gradeStr.includes('準1級')) grade = '準1級';
         else if (gradeStr.includes('1級')) grade = '1級';
         
-        // 「希望しない」= 自分のタブレットを持参する → hasTablet: true
-        // 「希望する」 = 貸し出し希望（持参しない）  → hasTablet: false
-        const hasTablet = tabletKey ? String(row[tabletKey]).includes('希望しない') : false;
+        // ★ 大学前教室はタブレット持参が前提のため、常にtrue
+        const hasTablet = true;
         const rawAttend = attendKey ? String(row[attendKey] || '') : '';
 
         // 新規か更新かを判定
@@ -694,7 +708,7 @@ function renderMainContent() {
                 <input type="text" value="${p.schoolYear || ''}" onchange="updateParticipantInfo('${p.id}', 'schoolYear', this.value)" style="width: 55px; text-align: center; border: 1px solid var(--border-color); border-radius: 4px; padding: 4px; font-size: 0.9em;">
             </td>
             <td>
-                <select onchange="updateParticipantInfo('${p.id}', 'grade', this.value)" style="width: 75px; padding: 4px; border: 1px solid var(--border-color); border-radius: 4px;">
+                <select onchange="updateParticipantInfo('${p.id}', 'grade', this.value)" style="width: 75px; padding: 4px; border: 1px solid ${getGradeColor(p.grade)}; border-radius: 4px; background: ${getGradeColor(p.grade)}18; color: ${getGradeColor(p.grade)}; font-weight: 700;">
                     ${['1級', '準1級', '2級', '準2級プラス', '準2級', '3級', '4級', '5級'].map(g => `<option value="${g}" ${p.grade === g ? 'selected' : ''}>${g}</option>`).join('')}
                 </select>
             </td>
