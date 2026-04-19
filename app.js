@@ -68,6 +68,8 @@ let appData = {};
 let newParticipantIds = new Set(); // 未確認の新規参加者を追跡（localStorageに永続化）
 let hasRendered = false; // ★ 画面が一度でも描画されたかどうか（初回保存防止用）
 let currentSort = { key: null, asc: true }; // ★ ソート状態
+let cloudLastUpdated = null; // ★ クラウド最終更新時刻（デバッグ用）
+let isSyncing = false; // ★ 同期中フラグ（同期中の保存を防止）
 
 // 初期化
 function init() {
@@ -113,40 +115,57 @@ async function loadData() {
 
 // ====== クラウド同期機能 ======
 async function syncWithCloud() {
+    if (isSyncing) return;
+    isSyncing = true;
     showLoading("クラウドから最新のデータを同期中...");
     try {
-        const response = await fetch(GAS_WEB_APP_URL);
+        // キャッシュを回避するためクエリにタイムスタンプを付与
+        const url = GAS_WEB_APP_URL + (GAS_WEB_APP_URL.includes('?') ? '&' : '?') + 't=' + Date.now();
+        const response = await fetch(url, { cache: 'no-store' });
         const data = await response.json();
-        
+        cloudLastUpdated = data.lastUpdated || null;
+
         // ★ 1. クラウドの成績データをフル上書き（クラウド優先）
         if (data.appData && Object.keys(data.appData).length > 0) {
             appData = data.appData;
         }
+
+        // ★ 2. クラウドの participantsList があれば採用（他端末での氏名・級・手動追加の編集を反映）
+        if (Array.isArray(data.participantsList) && data.participantsList.length > 0) {
+            participantsList = data.participantsList;
+        }
+
+        // ★ 3. クラウドの sessionsInfo があれば採用（他端末で追加された日程を反映）
+        if (Array.isArray(data.sessionsInfo) && data.sessionsInfo.length > 0) {
+            sessionsInfo = data.sessionsInfo;
+            localStorage.setItem('eikenDaigakumaeSessions', JSON.stringify(sessionsInfo));
+        }
+
         // 全セッションのエントリを保証
         sessionsInfo.forEach(session => {
             if (!appData[session.id]) {
                 appData[session.id] = { generalHomework: '', generalNotes: '', participants: {} };
             }
         });
-        
-        // ★ 2. フォーム回答を処理（新規参加者を追加）
+
+        // ★ 4. フォーム回答を処理（新規参加者を追加）
         newParticipantIds = new Set();
         if (data.formResponses && data.formResponses.length > 0) {
             processFormResponses(data.formResponses);
         }
-        
-        // ★ 3. 旧ID(p_ext_)データの新ID(p_form_)マイグレーション
+
+        // ★ 5. 旧ID(p_ext_)データの新ID(p_form_)マイグレーション
         if (data.appData && Object.keys(data.appData).length > 0) {
             const nameToNewId = {};
             participantsList.forEach(p => { nameToNewId[p.name] = p.id; });
-            
+
             Object.keys(data.appData).forEach(sessionId => {
                 const cloudParticipants = data.appData[sessionId]?.participants || {};
                 Object.keys(cloudParticipants).forEach(oldId => {
                     if (!oldId.startsWith('p_ext_')) return;
                     const pData = cloudParticipants[oldId];
                     if (!pData.rpContent && !pData.apContent && !pData.rpScore && !pData.apScore && !pData.remarks) return;
-                    
+
                     // フォーム行インデックスから名前を特定
                     const match = oldId.match(/_(\d+)$/);
                     if (match && data.formResponses) {
@@ -159,7 +178,7 @@ async function syncWithCloud() {
                                 const newId = nameToNewId[rawName];
                                 if (newId && newId !== oldId) {
                                     if (!appData[sessionId]) appData[sessionId] = { generalHomework: '', generalNotes: '', participants: {} };
-                                    if (!appData[sessionId].participants[newId] || 
+                                    if (!appData[sessionId].participants[newId] ||
                                         (!appData[sessionId].participants[newId].rpContent && !appData[sessionId].participants[newId].apContent)) {
                                         appData[sessionId].participants[newId] = pData;
                                     }
@@ -170,8 +189,8 @@ async function syncWithCloud() {
                 });
             });
         }
-        
-        // ★ 4. 旧IDのゴミデータをクリーンアップ
+
+        // ★ 6. 旧IDのゴミデータをクリーンアップ（participantsListがクラウドと同期された後で実行）
         const validIds = new Set(participantsList.map(p => p.id));
         Object.keys(appData).forEach(sessionId => {
             if (appData[sessionId] && appData[sessionId].participants) {
@@ -182,17 +201,17 @@ async function syncWithCloud() {
                 });
             }
         });
-        
+
         // 新規参加者がいれば通知を表示
         if (newParticipantIds.size > 0) {
             showNotification(`🆕 新しい申し込みが ${newParticipantIds.size} 件あります！`);
             localStorage.setItem('eikenDaigakumaeNewIds', JSON.stringify([...newParticipantIds]));
         }
-        
+
         // ★ ローカルにも最新データを保存
         localStorage.setItem('eikenDaigakumaeData', JSON.stringify(appData));
         localStorage.setItem('eikenDaigakumaeParticipants', JSON.stringify(participantsList));
-        
+
         if (!currentSessionId && sessionsInfo.length > 0) {
             currentSessionId = sessionsInfo[0].id;
         }
@@ -204,6 +223,7 @@ async function syncWithCloud() {
     } catch(e) {
         console.error("クラウド同期エラー:", e);
     } finally {
+        isSyncing = false;
         hideLoading();
     }
 }
@@ -334,6 +354,8 @@ function processFormResponses(formResponses) {
 // ★ フォーム+iframe送信方式でCORSを完全回避
 async function saveData() {
     if (!currentSessionId) return;
+    // ★ 同期中は保存しない（同期中にDOMから上書きされると整合性が崩れるため）
+    if (isSyncing) return;
     // ★ まだ画面が描画されていない段階ではDOMから空データを取得してしまうため保存しない
     if (!hasRendered) return;
 
@@ -361,14 +383,19 @@ async function saveData() {
     // オフライン動作用の一時保存
     localStorage.setItem('eikenDaigakumaeData', JSON.stringify(appData));
     localStorage.setItem('eikenDaigakumaeParticipants', JSON.stringify(participantsList));
-    
+    localStorage.setItem('eikenDaigakumaeSessions', JSON.stringify(sessionsInfo));
+
     // 保存メッセージの表示
     const status = document.getElementById('saveStatus');
     status.textContent = 'クラウドへ保存中...';
     status.classList.add('show');
-    
+
     try {
-        await saveToCloud(appData);
+        await saveToCloud({
+            appData: appData,
+            participantsList: participantsList,
+            sessionsInfo: sessionsInfo
+        });
         status.textContent = 'クラウドへ保存完了 ✓';
         setTimeout(() => { status.classList.remove('show'); }, 3000);
     } catch (e) {
@@ -378,45 +405,88 @@ async function saveData() {
     }
 }
 
+// ★ 現在のメモリ状態のみをクラウドへ保存（DOMからは読み取らない）
+// 参加者情報の編集・日程追加・手動追加・削除の直後に呼び出す
+async function pushStateToCloud() {
+    if (isSyncing) return;
+    localStorage.setItem('eikenDaigakumaeData', JSON.stringify(appData));
+    localStorage.setItem('eikenDaigakumaeParticipants', JSON.stringify(participantsList));
+    localStorage.setItem('eikenDaigakumaeSessions', JSON.stringify(sessionsInfo));
+
+    const status = document.getElementById('saveStatus');
+    if (status) {
+        status.textContent = 'クラウドへ保存中...';
+        status.classList.add('show');
+    }
+    try {
+        await saveToCloud({
+            appData: appData,
+            participantsList: participantsList,
+            sessionsInfo: sessionsInfo
+        });
+        if (status) {
+            status.textContent = 'クラウドへ保存完了 ✓';
+            setTimeout(() => { status.classList.remove('show'); }, 2500);
+        }
+    } catch (e) {
+        console.error("クラウド保存エラー:", e);
+        if (status) {
+            status.textContent = '※オフライン保存のみ完了';
+            setTimeout(() => { status.classList.remove('show'); }, 3000);
+        }
+    }
+}
+
+// ★ 編集イベントの「連打」から cloud を守るためのデバウンス
+let _pushDebounceTimer = null;
+function pushStateToCloudDebounced(delay) {
+    if (_pushDebounceTimer) clearTimeout(_pushDebounceTimer);
+    _pushDebounceTimer = setTimeout(() => {
+        _pushDebounceTimer = null;
+        pushStateToCloud();
+    }, delay || 800);
+}
+
 // フォーム＋隠しiframeでGASにPOST送信（CORS完全回避）
-function saveToCloud(data) {
+function saveToCloud(payload) {
     return new Promise((resolve) => {
         // 既存のiframe/formがあれば削除
         const oldIframe = document.getElementById('gas_save_frame');
         if (oldIframe) oldIframe.remove();
         const oldForm = document.getElementById('gas_save_form');
         if (oldForm) oldForm.remove();
-        
+
         // 隠しiframeを作成
         const iframe = document.createElement('iframe');
         iframe.id = 'gas_save_frame';
         iframe.name = 'gas_save_frame';
         iframe.style.display = 'none';
         document.body.appendChild(iframe);
-        
+
         // フォームを作成
         const form = document.createElement('form');
         form.id = 'gas_save_form';
         form.method = 'POST';
         form.action = GAS_WEB_APP_URL;
         form.target = 'gas_save_frame';
-        
+
         // ★ Base64エンコードで日本語の文字化けを完全回避
-        const jsonStr = JSON.stringify(data);
+        // payload は { appData, participantsList, sessionsInfo } の形式
+        const jsonStr = JSON.stringify(payload);
         const utf8Bytes = new TextEncoder().encode(jsonStr);
         let binaryStr = '';
         utf8Bytes.forEach(b => binaryStr += String.fromCharCode(b));
         const base64Data = btoa(binaryStr);
-        
+
         const input = document.createElement('input');
         input.type = 'hidden';
         input.name = 'data_b64';
         input.value = base64Data;
         form.appendChild(input);
-        
+
         document.body.appendChild(form);
         form.submit();
-        
+
         // 送信完了後にクリーンアップ
         setTimeout(() => {
             iframe.remove();
@@ -490,12 +560,15 @@ function updateParticipantInfo(id, field, value) {
             p[field] = value;
         }
         localStorage.setItem('eikenDaigakumaeParticipants', JSON.stringify(participantsList));
-        
+
         // 受験級が変更された場合はプルダウンを再描画する
         if (field === 'grade') {
             saveData();
             renderMainContent();
         }
+
+        // ★ 参加者情報の編集もクラウドへ同期（デバウンス）
+        pushStateToCloudDebounced(1000);
     }
 }
 
@@ -532,9 +605,12 @@ function addParticipant() {
     
     localStorage.setItem('eikenDaigakumaeParticipants', JSON.stringify(participantsList));
     localStorage.setItem('eikenDaigakumaeData', JSON.stringify(appData));
-    
+
     renderMainContent();
-    
+
+    // ★ 手動追加した参加者を即座にクラウドへ同期（他端末で消えないように）
+    pushStateToCloud();
+
     // 追加した参加者の名前入力欄にフォーカスを当てる（少し遅延させる）
     setTimeout(() => {
         const trs = document.getElementById('participantTableBody').querySelectorAll('tr');
@@ -574,10 +650,12 @@ function deleteFromCurrentSession() {
     if (appData[currentSessionId] && appData[currentSessionId].participants[id]) {
         delete appData[currentSessionId].participants[id];
     }
-    
+
     localStorage.setItem('eikenDaigakumaeData', JSON.stringify(appData));
     closeDeleteModal();
     renderMainContent();
+    // ★ クラウドへも同期
+    pushStateToCloud();
 }
 
 // 全日程から削除
@@ -587,18 +665,20 @@ function deleteFromAllSessions() {
 
     // 参加者リストから完全削除
     participantsList = participantsList.filter(x => x.id !== id);
-    
+
     // 全日程のデータから削除
     Object.keys(appData).forEach(sessionId => {
         if (appData[sessionId].participants[id]) {
             delete appData[sessionId].participants[id];
         }
     });
-    
+
     localStorage.setItem('eikenDaigakumaeParticipants', JSON.stringify(participantsList));
     localStorage.setItem('eikenDaigakumaeData', JSON.stringify(appData));
     closeDeleteModal();
     renderMainContent();
+    // ★ クラウドへも同期
+    pushStateToCloud();
 }
 
 // メインコンテンツ（参加者リストやフォーム）の描画
@@ -847,13 +927,16 @@ function addSession() {
     
     sessionsInfo.push(newSession);
     appData[newId] = { generalHomework: '', generalNotes: '', participants: {} };
-    
+
     // 保存
     localStorage.setItem('eikenDaigakumaeSessions', JSON.stringify(sessionsInfo));
     localStorage.setItem('eikenDaigakumaeData', JSON.stringify(appData));
-    
+
     closeAddSessionModal();
     renderSidebar();
+
+    // ★ 新しい日程を即座にクラウドへ同期（他端末にも反映）
+    pushStateToCloud();
 }
 
 // ====== テーブルソート ======

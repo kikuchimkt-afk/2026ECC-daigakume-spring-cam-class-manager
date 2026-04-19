@@ -11,6 +11,37 @@ function setup() {
   }
 }
 
+// 保存されているデータを読み取り、現行フォーマットに正規化して返す
+function _readStoredData_(storageSheet) {
+  let rawStr = "{}";
+  if (storageSheet) {
+    rawStr = storageSheet.getRange('A1').getValue() || "{}";
+  }
+  let parsed = {};
+  try {
+    parsed = JSON.parse(rawStr);
+  } catch (err) {
+    parsed = {};
+  }
+
+  // 新フォーマット: {appData, participantsList, sessionsInfo, lastUpdated}
+  // 旧フォーマット: appData のみがそのまま入っている
+  if (parsed && (parsed.appData !== undefined || parsed.participantsList !== undefined || parsed.sessionsInfo !== undefined)) {
+    return {
+      appData: parsed.appData || {},
+      participantsList: parsed.participantsList || [],
+      sessionsInfo: parsed.sessionsInfo || [],
+      lastUpdated: parsed.lastUpdated || null
+    };
+  }
+  return {
+    appData: parsed || {},
+    participantsList: [],
+    sessionsInfo: [],
+    lastUpdated: null
+  };
+}
+
 // 2. データの取得（GETリクエスト）
 function doGet(e) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -30,16 +61,16 @@ function doGet(e) {
     }
   }
 
-  // 保存済みデータの取得
+  // 保存済みデータの取得（新/旧フォーマット両対応）
   const storageSheet = ss.getSheetByName(STORAGE_SHEET_NAME);
-  let appDataStr = "{}";
-  if (storageSheet) {
-    appDataStr = storageSheet.getRange('A1').getValue() || "{}";
-  }
+  const stored = _readStoredData_(storageSheet);
 
   const response = {
     formResponses: formResponses,
-    appData: JSON.parse(appDataStr)
+    appData: stored.appData,
+    participantsList: stored.participantsList,
+    sessionsInfo: stored.sessionsInfo,
+    lastUpdated: stored.lastUpdated
   };
 
   return ContentService.createTextOutput(JSON.stringify(response))
@@ -48,36 +79,75 @@ function doGet(e) {
 
 // 3. データの保存（POSTリクエスト - HTMLフォーム送信対応）
 function doPost(e) {
+  // 複数端末からの同時書き込み競合を防止
+  const lock = LockService.getScriptLock();
   try {
-    let appDataStr = '{}';
-    
+    lock.waitLock(10000);
+  } catch (lockErr) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "他の保存処理が進行中のためタイムアウトしました。もう一度お試しください。" }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  try {
+    let payloadStr = '{}';
+
     // ★ Base64送信（文字化け完全回避）の場合
     if (e.parameter && e.parameter.data_b64) {
       var decoded = Utilities.base64Decode(e.parameter.data_b64);
-      appDataStr = Utilities.newBlob(decoded).getDataAsString('UTF-8');
+      payloadStr = Utilities.newBlob(decoded).getDataAsString('UTF-8');
     }
     // フォーム送信（application/x-www-form-urlencoded）の場合（フォールバック）
     else if (e.parameter && e.parameter.data) {
-      appDataStr = e.parameter.data;
+      payloadStr = e.parameter.data;
     }
     // JSON送信（text/plain）の場合
     else if (e.postData && e.postData.contents) {
-      const payload = JSON.parse(e.postData.contents);
-      appDataStr = JSON.stringify(payload.appData);
+      payloadStr = e.postData.contents;
     }
-    
+
+    let incoming = {};
+    try {
+      incoming = JSON.parse(payloadStr);
+    } catch (err) {
+      incoming = {};
+    }
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const storageSheet = ss.getSheetByName(STORAGE_SHEET_NAME);
-    
-    if (storageSheet) {
-      storageSheet.getRange('A1').setValue(appDataStr);
-      return ContentService.createTextOutput(JSON.stringify({ status: "success" }))
-        .setMimeType(ContentService.MimeType.JSON);
-    } else {
+    if (!storageSheet) {
       throw new Error("保存用シートが見つかりません。");
     }
+
+    // 既存データ（現在のクラウド状態）を読み込み、送られていないキーは既存値を保持
+    const current = _readStoredData_(storageSheet);
+
+    let newAppData, newParticipantsList, newSessionsInfo;
+    if (incoming && (incoming.appData !== undefined || incoming.participantsList !== undefined || incoming.sessionsInfo !== undefined)) {
+      newAppData = incoming.appData !== undefined ? incoming.appData : current.appData;
+      newParticipantsList = incoming.participantsList !== undefined ? incoming.participantsList : current.participantsList;
+      newSessionsInfo = incoming.sessionsInfo !== undefined ? incoming.sessionsInfo : current.sessionsInfo;
+    } else {
+      // 旧クライアント（appDataだけを送ってくる）との互換
+      newAppData = incoming || current.appData;
+      newParticipantsList = current.participantsList;
+      newSessionsInfo = current.sessionsInfo;
+    }
+
+    const toStore = {
+      appData: newAppData || {},
+      participantsList: newParticipantsList || [],
+      sessionsInfo: newSessionsInfo || [],
+      lastUpdated: new Date().toISOString()
+    };
+
+    storageSheet.getRange('A1').setValue(JSON.stringify(toStore));
+
+    return ContentService.createTextOutput(JSON.stringify({ status: "success", lastUpdated: toStore.lastUpdated }))
+      .setMimeType(ContentService.MimeType.JSON);
   } catch (error) {
     return ContentService.createTextOutput(JSON.stringify({ status: "error", message: error.message }))
       .setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    try { lock.releaseLock(); } catch (_) {}
   }
 }
