@@ -53,7 +53,7 @@ function _readStoredData_(storageSheet) {
 function doGet(e) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  // ★ action=downloadFormSheet の場合：フォーム回答シートのExcelダウンロードURL を返す
+  // ★ action=downloadFormSheet の場合：GASサーバー側でExcelを取得しBase64で返す（認証不要）
   if (e && e.parameter && e.parameter.action === 'downloadFormSheet') {
     const formSheet = ss.getSheetByName(FORM_SHEET_NAME);
     if (!formSheet) {
@@ -61,15 +61,33 @@ function doGet(e) {
         status: 'error', message: 'フォーム回答シートが見つかりません'
       })).setMimeType(ContentService.MimeType.JSON);
     }
-    const spreadsheetId = ss.getId();
-    const sheetId = formSheet.getSheetId();
-    // Google Drive のエクスポートURLでExcel形式（xlsx）を生成
-    const exportUrl = 'https://docs.google.com/spreadsheets/d/' + spreadsheetId + '/export?format=xlsx&gid=' + sheetId;
-    return ContentService.createTextOutput(JSON.stringify({
-      status: 'ok',
-      exportUrl: exportUrl,
-      sheetName: FORM_SHEET_NAME
-    })).setMimeType(ContentService.MimeType.JSON);
+    try {
+      const spreadsheetId = ss.getId();
+      const sheetId = formSheet.getSheetId();
+      const exportUrl = 'https://docs.google.com/spreadsheets/d/' + spreadsheetId + '/export?format=xlsx&gid=' + sheetId;
+      // デプロイ者のOAuthトークンでサーバーサイド取得（クライアント認証不要）
+      const token = ScriptApp.getOAuthToken();
+      const resp = UrlFetchApp.fetch(exportUrl, {
+        headers: { 'Authorization': 'Bearer ' + token },
+        muteHttpExceptions: true
+      });
+      if (resp.getResponseCode() !== 200) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'error', message: 'Excelエクスポート失敗 (HTTP ' + resp.getResponseCode() + ')'
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      const fileBytes = resp.getBlob().getBytes();
+      const base64 = Utilities.base64Encode(fileBytes);
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'ok',
+        fileName: FORM_SHEET_NAME + '.xlsx',
+        base64: base64
+      })).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'error', message: 'Excel取得エラー: ' + String(err.message || err)
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
   }
 
   // フォーム回答データの取得

@@ -1043,19 +1043,32 @@ function sortTable(key) {
 
 // ====== フォーム回答スプレッドシートDL ======
 async function downloadFormSpreadsheet() {
-    showLoading("フォーム回答シートのダウンロードURLを取得中...");
+    showLoading("フォーム回答シートをダウンロード中...");
     try {
         const url = GAS_WEB_APP_URL + (GAS_WEB_APP_URL.includes('?') ? '&' : '?') + 'action=downloadFormSheet&t=' + Date.now();
         const response = await fetch(url, { cache: 'no-store' });
         const data = await response.json();
 
-        if (data.status !== 'ok' || !data.exportUrl) {
-            alert('エラー: ' + (data.message || 'ダウンロードURLの取得に失敗しました'));
+        if (data.status !== 'ok' || !data.base64) {
+            alert('エラー: ' + (data.message || 'ダウンロードに失敗しました'));
             return;
         }
 
-        // エクスポートURLを新しいタブで開く（ExcelファイルがDLされる）
-        window.open(data.exportUrl, '_blank');
+        // Base64 → バイナリ → Blob → ダウンロード
+        const byteCharacters = atob(data.base64);
+        const byteArray = new Uint8Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+            byteArray[i] = byteCharacters.charCodeAt(i);
+        }
+        const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = data.fileName || 'フォーム回答.xlsx';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
     } catch (e) {
         console.error("フォーム回答DLエラー:", e);
         alert('ダウンロードに失敗しました: ' + (e.message || '不明なエラー'));
