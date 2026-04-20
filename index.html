@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>英検勉強会 日誌管理（大学前）</title>
-    <link rel="stylesheet" href="style.css?v=18">
+    <link rel="stylesheet" href="style.css?v=19">
     <script>
         // ちらつき防止のため、ページレンダリング前にテーマを適用
         (function() {
@@ -41,8 +41,11 @@
             </ul>
             <button class="add-session-btn" onclick="showAddSessionModal()">＋ 日程を追加</button>
             <div class="sidebar-footer" style="padding: 20px; border-top: 1px solid var(--border); margin-top: auto;">
+                <button class="btn" style="width: 100%; display: block; text-align: center; background-color: var(--input-bg); color: var(--text-main); cursor: pointer; font-size: 13px; border: 1px solid var(--border); margin-bottom: 10px;" onclick="downloadFormSpreadsheet()">
+                    📋 フォーム回答DL（Excel）
+                </button>
                 <button class="btn" style="width: 100%; display: block; text-align: center; background-color: var(--input-bg); color: var(--text-main); cursor: pointer; font-size: 13px; border: 1px solid var(--border); margin-bottom: 10px;" onclick="downloadExcel()">
-                    📊 Excel一括ダウンロード
+                    📊 日誌Excel一括ダウンロード
                 </button>
                 <button class="btn primary-btn" style="width: 100%; display: block; text-align: center; background-color: var(--success); cursor: pointer; font-size: 13px; border: none;" onclick="syncWithCloud()">
                     クラウドから最新読込
@@ -180,6 +183,6 @@
 
     <!-- Scripts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="app.js?v=18"></script>
+    <script src="app.js?v=19"></script>
 </body>
 </html>

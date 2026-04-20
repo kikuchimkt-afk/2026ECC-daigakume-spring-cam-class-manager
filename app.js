@@ -1041,6 +1041,29 @@ function sortTable(key) {
     renderMainContent();
 }
 
+// ====== フォーム回答スプレッドシートDL ======
+async function downloadFormSpreadsheet() {
+    showLoading("フォーム回答シートのダウンロードURLを取得中...");
+    try {
+        const url = GAS_WEB_APP_URL + (GAS_WEB_APP_URL.includes('?') ? '&' : '?') + 'action=downloadFormSheet&t=' + Date.now();
+        const response = await fetch(url, { cache: 'no-store' });
+        const data = await response.json();
+
+        if (data.status !== 'ok' || !data.exportUrl) {
+            alert('エラー: ' + (data.message || 'ダウンロードURLの取得に失敗しました'));
+            return;
+        }
+
+        // エクスポートURLを新しいタブで開く（ExcelファイルがDLされる）
+        window.open(data.exportUrl, '_blank');
+    } catch (e) {
+        console.error("フォーム回答DLエラー:", e);
+        alert('ダウンロードに失敗しました: ' + (e.message || '不明なエラー'));
+    } finally {
+        hideLoading();
+    }
+}
+
 // ====== Excelダウンロード ======
 function downloadExcel() {
     if (!appData || Object.keys(appData).length === 0) {
