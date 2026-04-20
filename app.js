@@ -1049,26 +1049,30 @@ async function downloadFormSpreadsheet() {
         const response = await fetch(url, { cache: 'no-store' });
         const data = await response.json();
 
-        if (data.status !== 'ok' || !data.base64) {
-            alert('エラー: ' + (data.message || 'ダウンロードに失敗しました'));
+        if (data.status !== 'ok' || !data.rawData) {
+            alert('エラー: ' + (data.message || 'データの取得に失敗しました'));
             return;
         }
 
-        // Base64 → バイナリ → Blob → ダウンロード
-        const byteCharacters = atob(data.base64);
-        const byteArray = new Uint8Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-            byteArray[i] = byteCharacters.charCodeAt(i);
+        // GASから受け取った2次元配列をXLSXでExcel化
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(data.rawData);
+        // 列幅を自動調整（各列の最大文字数を基準に設定）
+        if (data.rawData.length > 0) {
+            ws['!cols'] = data.rawData[0].map((_, colIdx) => {
+                let maxLen = 8;
+                data.rawData.forEach(row => {
+                    const cellLen = String(row[colIdx] || '').length;
+                    if (cellLen > maxLen) maxLen = cellLen;
+                });
+                return { wch: Math.min(maxLen + 2, 40) };
+            });
         }
-        const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        XLSX.utils.book_append_sheet(wb, ws, data.sheetName || 'フォームの回答');
 
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = data.fileName || 'フォーム回答.xlsx';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(a.href);
+        const today = new Date();
+        const fileName = `フォーム回答_${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}.xlsx`;
+        XLSX.writeFile(wb, fileName);
     } catch (e) {
         console.error("フォーム回答DLエラー:", e);
         alert('ダウンロードに失敗しました: ' + (e.message || '不明なエラー'));
