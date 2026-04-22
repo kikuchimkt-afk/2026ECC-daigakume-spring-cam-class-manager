@@ -1117,6 +1117,14 @@ function showAvailabilityModal() {
         listEl.appendChild(item);
     });
 
+    // デフォルトの冒頭メッセージをセット（日付・時刻は自動）
+    const msgEl = document.getElementById('availHeaderMsg');
+    if (msgEl && !msgEl.value.trim()) {
+        const now = new Date();
+        const dateStr = `${now.getMonth() + 1}/${now.getDate()}付　${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}時点`;
+        msgEl.value = `${dateStr}\n\nECCジュニア大学前教室の皆様へ\n英検勉強会の空き🈳状況です。`;
+    }
+
     document.getElementById('availabilityModal').style.display = 'flex';
 }
 
@@ -1127,12 +1135,16 @@ function closeAvailabilityModal() {
 // ★ LINE用テキスト生成＆コピー
 function copyAvailabilityText() {
     const lines = [];
+
+    // 冒頭メッセージを挿入
+    const headerMsg = (document.getElementById('availHeaderMsg').value || '').trim();
+    if (headerMsg) {
+        lines.push(headerMsg);
+        lines.push('ーーーーーー');
+    }
+
     lines.push('📊 英検勉強会（大学前）空席状況');
     lines.push(`各日 定員${SESSION_CAPACITY}名／${MIN_TO_OPEN}名未満は開講しません`);
-    lines.push('');
-    lines.push('⭕ …実施予定');
-    lines.push('⚠️ …実施不可の可能性あり');
-    lines.push('🈵 …キャンセル待ち');
     lines.push('');
 
     sessionsInfo.forEach(session => {
@@ -1153,6 +1165,10 @@ function copyAvailabilityText() {
         lines.push(`${icon} ${session.date}　${label}`);
     });
 
+    lines.push('');
+    lines.push('⭕ …実施予定');
+    lines.push('⚠️ …実施不可の可能性あり');
+    lines.push('🈵 …キャンセル待ち');
     lines.push('');
     const now = new Date();
     lines.push(`（${now.getMonth() + 1}/${now.getDate()} ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')} 時点）`);
