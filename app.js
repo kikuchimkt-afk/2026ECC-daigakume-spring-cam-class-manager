@@ -1130,6 +1130,10 @@ function copyAvailabilityText() {
     lines.push('📊 英検勉強会（大学前）空席状況');
     lines.push(`各日 定員${SESSION_CAPACITY}名／${MIN_TO_OPEN}名未満は開講しません`);
     lines.push('');
+    lines.push('⭕ …実施予定');
+    lines.push('⚠️ …実施不可の可能性あり');
+    lines.push('🈵 …キャンセル待ち');
+    lines.push('');
 
     sessionsInfo.forEach(session => {
         const count = getSessionCount(session.id);
