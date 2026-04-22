@@ -29,13 +29,10 @@ function getPastPaperOptions(grade) {
         if (grade === '準2級プラス' && year < 2025) continue;
         
         for (let num = 1; num <= 3; num++) {
-            // 旧仕様通り、3級の2024年度以降のみ「新形式」表記を付与
-            let isNewFormat = (year >= 2024 && grade === '3級');
-            
-            let label = `第${num}回${isNewFormat ? '（新形式）' : ''}`;
+            let label = `第${num}回`;
             options.push(`<option value="${year}年度 ${label}">${year}年度 ${label}</option>`);
             
-            let satLabel = `第${num}回（準会場${isNewFormat ? '/新形式' : ''}）`;
+            let satLabel = `第${num}回（準会場）`;
             options.push(`<option value="${year}年度 ${satLabel}">${year}年度 ${satLabel}</option>`);
         }
     }
