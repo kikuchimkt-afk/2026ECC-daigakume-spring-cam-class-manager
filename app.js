@@ -1071,38 +1071,34 @@ function addSession() {
 const SESSION_CAPACITY = 5;    // 各日程の定員
 const MIN_TO_OPEN = 3;         // 開講に必要な最少人数
 
+function getSessionCount(sessionId) {
+    if (!appData[sessionId] || !appData[sessionId].participants) return 0;
+    return Object.keys(appData[sessionId].participants).filter(pid =>
+        participantsList.some(p => p.id === pid)
+    ).length;
+}
+
 function showAvailabilityModal() {
     const listEl = document.getElementById('availabilityList');
     listEl.innerHTML = '';
+    // コピーフィードバックをリセット
+    const fb = document.getElementById('availCopyFeedback');
+    if (fb) { fb.textContent = ''; fb.classList.remove('show'); }
 
     sessionsInfo.forEach(session => {
-        // この日程の有効な参加者数を算出
-        let count = 0;
-        if (appData[session.id] && appData[session.id].participants) {
-            count = Object.keys(appData[session.id].participants).filter(pid =>
-                participantsList.some(p => p.id === pid)
-            ).length;
-        }
-
+        const count = getSessionCount(session.id);
         const remaining = Math.max(0, SESSION_CAPACITY - count);
         const pct = Math.min((count / SESSION_CAPACITY) * 100, 100);
 
-        // ステータス判定
-        let statusClass, fillClass, statusTag, statusLabel;
+        let statusClass, statusLabel;
         if (count >= SESSION_CAPACITY) {
             statusClass = 'status-full';
-            fillClass = 'fill-full';
-            statusTag = 'tag-full';
             statusLabel = '満席';
         } else if (count < MIN_TO_OPEN) {
             statusClass = 'status-not-enough';
-            fillClass = 'fill-not-enough';
-            statusTag = 'tag-not-enough';
-            statusLabel = `開講未定（残${MIN_TO_OPEN - count}名必要）`;
+            statusLabel = `開講未定（あと${MIN_TO_OPEN - count}名）`;
         } else {
             statusClass = 'status-open';
-            fillClass = 'fill-open';
-            statusTag = 'tag-open';
             statusLabel = `開講予定（残${remaining}席）`;
         }
 
@@ -1112,11 +1108,11 @@ function showAvailabilityModal() {
             <span class="avail-date">${session.date}</span>
             <div class="avail-bar-wrap">
                 <div class="avail-bar">
-                    <div class="avail-bar-fill ${fillClass}" style="width: ${pct}%;"></div>
+                    <div class="avail-bar-fill" style="width: ${pct}%;"></div>
                 </div>
                 <span class="avail-count">${count}/${SESSION_CAPACITY}</span>
             </div>
-            <span class="avail-status ${statusTag}">${statusLabel}</span>
+            <span class="avail-status">${statusLabel}</span>
         `;
         listEl.appendChild(item);
     });
@@ -1126,6 +1122,58 @@ function showAvailabilityModal() {
 
 function closeAvailabilityModal() {
     document.getElementById('availabilityModal').style.display = 'none';
+}
+
+// ★ LINE用テキスト生成＆コピー
+function copyAvailabilityText() {
+    const lines = [];
+    lines.push('📊 英検勉強会（大学前）空席状況');
+    lines.push(`各日 定員${SESSION_CAPACITY}名／${MIN_TO_OPEN}名未満は開講しません`);
+    lines.push('');
+
+    sessionsInfo.forEach(session => {
+        const count = getSessionCount(session.id);
+        const remaining = Math.max(0, SESSION_CAPACITY - count);
+
+        let icon, label;
+        if (count >= SESSION_CAPACITY) {
+            icon = '✕';
+            label = '満席';
+        } else if (count < MIN_TO_OPEN) {
+            icon = '△';
+            label = `開講未定（あと${MIN_TO_OPEN - count}名で開講）`;
+        } else {
+            icon = '◎';
+            label = `残${remaining}席`;
+        }
+        lines.push(`${icon} ${session.date}　${label}`);
+    });
+
+    lines.push('');
+    const now = new Date();
+    lines.push(`（${now.getMonth() + 1}/${now.getDate()} ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')} 時点）`);
+
+    const text = lines.join('\n');
+
+    navigator.clipboard.writeText(text).then(() => {
+        const fb = document.getElementById('availCopyFeedback');
+        fb.textContent = '✓ コピーしました';
+        fb.classList.add('show');
+        setTimeout(() => fb.classList.remove('show'), 3000);
+    }).catch(() => {
+        // フォールバック（古いブラウザ対応）
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.cssText = 'position:fixed;left:-9999px;';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        const fb = document.getElementById('availCopyFeedback');
+        fb.textContent = '✓ コピーしました';
+        fb.classList.add('show');
+        setTimeout(() => fb.classList.remove('show'), 3000);
+    });
 }
 
 // ====== テーブルソート ======

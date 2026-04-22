@@ -178,12 +178,14 @@
 
     <!-- 空席状況・開講一覧モーダル -->
     <div id="availabilityModal" class="modal-overlay" style="display: none;">
-        <div class="modal-content" style="max-width: 560px;">
+        <div class="modal-content" style="max-width: 520px;">
             <h3 style="margin-bottom: 6px; color: var(--text-main); font-size: 18px;">📊 空席状況・開講一覧</h3>
             <p style="font-size: 12px; color: var(--text-sec); margin-bottom: 16px;">各日 定員5名 ／ 3名未満は開講しません</p>
-            <div id="availabilityList" style="max-height: 60vh; overflow-y: auto;"></div>
-            <div style="display: flex; justify-content: flex-end; margin-top: 16px;">
-                <button type="button" class="btn primary-btn" onclick="closeAvailabilityModal()">閉じる</button>
+            <div id="availabilityList" style="max-height: 55vh; overflow-y: auto;"></div>
+            <div style="display: flex; align-items: center; gap: 10px; margin-top: 16px;">
+                <button type="button" class="btn avail-copy-btn" onclick="copyAvailabilityText()">📋 LINE用テキストをコピー</button>
+                <span id="availCopyFeedback" class="avail-copy-feedback"></span>
+                <button type="button" class="btn primary-btn" style="margin-left: auto;" onclick="closeAvailabilityModal()">閉じる</button>
             </div>
         </div>
     </div>
