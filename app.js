@@ -1122,7 +1122,7 @@ function showAvailabilityModal() {
     if (msgEl && !msgEl.value.trim()) {
         const now = new Date();
         const dateStr = `${now.getMonth() + 1}/${now.getDate()}付　${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}時点`;
-        msgEl.value = `${dateStr}\n\nECCジュニア大学前教室の皆様へ\n英検勉強会の空き🈳状況です。`;
+        msgEl.value = `${dateStr}\n\nECCジュニア大学前教室の皆様へ\n英検勉強会の空き🈳状況です。\n当日キャンセルの方が出たため🈳が増えています。また人数減のため催行できない日程がある可能性があります。`;
     }
 
     document.getElementById('availabilityModal').style.display = 'flex';
