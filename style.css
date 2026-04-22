@@ -613,6 +613,116 @@ input:checked + .slider:before {
     background: var(--accent-light);
 }
 
+/* ===== Availability Button ===== */
+.availability-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: calc(100% - 32px);
+    margin: 4px 16px 8px;
+    padding: 10px;
+    background: var(--gradient-accent);
+    border: none;
+    border-radius: var(--radius-sm);
+    color: white;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.availability-btn:hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(13, 148, 136, 0.3);
+}
+
+/* ===== Availability Modal Items ===== */
+.avail-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 6px;
+    border-left: 4px solid transparent;
+    transition: background 0.15s;
+}
+.avail-item.status-open {
+    background: rgba(16, 185, 129, 0.08);
+    border-left-color: var(--success);
+}
+.avail-item.status-not-enough {
+    background: rgba(239, 68, 68, 0.08);
+    border-left-color: var(--danger);
+}
+.avail-item.status-full {
+    background: rgba(245, 158, 11, 0.08);
+    border-left-color: #f59e0b;
+}
+.avail-date {
+    font-weight: 700;
+    font-size: 14px;
+    min-width: 100px;
+    color: var(--text-main);
+}
+.avail-bar-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.avail-bar {
+    flex: 1;
+    height: 8px;
+    background: var(--input-bg);
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+}
+.avail-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+}
+.avail-bar-fill.fill-open {
+    background: var(--gradient-accent);
+}
+.avail-bar-fill.fill-not-enough {
+    background: linear-gradient(135deg, #ef4444, #f87171);
+}
+.avail-bar-fill.fill-full {
+    background: linear-gradient(135deg, #f59e0b, #fbbf24);
+}
+.avail-count {
+    font-size: 13px;
+    font-weight: 700;
+    min-width: 32px;
+    text-align: center;
+    color: var(--text-main);
+}
+.avail-status {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 12px;
+    white-space: nowrap;
+    min-width: 96px;
+    text-align: center;
+}
+.avail-status.tag-open {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--success);
+}
+.avail-status.tag-not-enough {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--danger);
+}
+.avail-status.tag-full {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+}
+
 /* ===== Session Modal Grid ===== */
 .session-modal-grid {
     display: grid;

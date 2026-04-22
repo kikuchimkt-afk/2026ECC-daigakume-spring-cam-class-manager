@@ -1067,6 +1067,67 @@ function addSession() {
     pushStateToCloud();
 }
 
+// ====== 空席状況・開講一覧モーダル ======
+const SESSION_CAPACITY = 5;    // 各日程の定員
+const MIN_TO_OPEN = 3;         // 開講に必要な最少人数
+
+function showAvailabilityModal() {
+    const listEl = document.getElementById('availabilityList');
+    listEl.innerHTML = '';
+
+    sessionsInfo.forEach(session => {
+        // この日程の有効な参加者数を算出
+        let count = 0;
+        if (appData[session.id] && appData[session.id].participants) {
+            count = Object.keys(appData[session.id].participants).filter(pid =>
+                participantsList.some(p => p.id === pid)
+            ).length;
+        }
+
+        const remaining = Math.max(0, SESSION_CAPACITY - count);
+        const pct = Math.min((count / SESSION_CAPACITY) * 100, 100);
+
+        // ステータス判定
+        let statusClass, fillClass, statusTag, statusLabel;
+        if (count >= SESSION_CAPACITY) {
+            statusClass = 'status-full';
+            fillClass = 'fill-full';
+            statusTag = 'tag-full';
+            statusLabel = '満席';
+        } else if (count < MIN_TO_OPEN) {
+            statusClass = 'status-not-enough';
+            fillClass = 'fill-not-enough';
+            statusTag = 'tag-not-enough';
+            statusLabel = `開講未定（残${MIN_TO_OPEN - count}名必要）`;
+        } else {
+            statusClass = 'status-open';
+            fillClass = 'fill-open';
+            statusTag = 'tag-open';
+            statusLabel = `開講予定（残${remaining}席）`;
+        }
+
+        const item = document.createElement('div');
+        item.className = `avail-item ${statusClass}`;
+        item.innerHTML = `
+            <span class="avail-date">${session.date}</span>
+            <div class="avail-bar-wrap">
+                <div class="avail-bar">
+                    <div class="avail-bar-fill ${fillClass}" style="width: ${pct}%;"></div>
+                </div>
+                <span class="avail-count">${count}/${SESSION_CAPACITY}</span>
+            </div>
+            <span class="avail-status ${statusTag}">${statusLabel}</span>
+        `;
+        listEl.appendChild(item);
+    });
+
+    document.getElementById('availabilityModal').style.display = 'flex';
+}
+
+function closeAvailabilityModal() {
+    document.getElementById('availabilityModal').style.display = 'none';
+}
+
 // ====== テーブルソート ======
 function sortTable(key) {
     if (currentSort.key === key) {
