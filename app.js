@@ -1137,13 +1137,13 @@ function copyAvailabilityText() {
 
         let icon, label;
         if (count >= SESSION_CAPACITY) {
-            icon = '✕';
+            icon = '🈵';
             label = '満席';
         } else if (count < MIN_TO_OPEN) {
-            icon = '△';
-            label = `開講未定（あと${MIN_TO_OPEN - count}名で開講）`;
+            icon = '⚠️';
+            label = `残${remaining}席／開講未定（あと${MIN_TO_OPEN - count}名で開講）`;
         } else {
-            icon = '◎';
+            icon = '⭕️';
             label = `残${remaining}席`;
         }
         lines.push(`${icon} ${session.date}　${label}`);
