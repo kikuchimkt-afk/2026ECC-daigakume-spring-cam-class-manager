@@ -1470,6 +1470,20 @@ async function diagnoseCloudSync() {
     return report;
 }
 
+// ====== 使い方マニュアル ======
+function openManualModal() {
+    const modal = document.getElementById('manualModal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    const body = modal.querySelector('.manual-body');
+    if (body) body.scrollTop = 0;
+}
+
+function closeManualModal() {
+    const modal = document.getElementById('manualModal');
+    if (modal) modal.style.display = 'none';
+}
+
 // ====== 削除済みリストから選択的に復帰 ======
 async function openRestoreModal() {
     const list = deletedParticipantNames || [];
