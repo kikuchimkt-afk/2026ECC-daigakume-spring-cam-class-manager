@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>英検勉強会 日誌管理（大学前）</title>
-    <link rel="stylesheet" href="style.css?v=19">
+    <link rel="stylesheet" href="style.css?v=20">
     <script>
         // ちらつき防止のため、ページレンダリング前にテーマを適用
         (function() {
@@ -54,6 +54,9 @@
                 <small style="display: block; margin-top: 8px; color: var(--text-sec); font-size: 11px; text-align: center;">Googleフォームの回答と同期</small>
                 <button class="btn" style="width: 100%; display: block; text-align: center; background-color: transparent; color: var(--text-sec); cursor: pointer; font-size: 11px; border: 1px dashed var(--border); margin-top: 10px;" onclick="diagnoseCloudSync()">
                     🔍 同期診断（開発者向け）
+                </button>
+                <button class="btn" style="width: 100%; display: block; text-align: center; background-color: transparent; color: var(--text-sec); cursor: pointer; font-size: 11px; border: 1px dashed var(--border); margin-top: 6px;" onclick="resetDeletedParticipants()" title="過去にアプリで「全日程から削除」した氏名リストを解除します。フォームに残っている人は次回同期で再表示されます。">
+                    🔧 削除リストをリセット
                 </button>
             </div>
         </aside>
@@ -202,6 +205,6 @@
 
     <!-- Scripts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="app.js?v=19"></script>
+    <script src="app.js?v=20"></script>
 </body>
 </html>

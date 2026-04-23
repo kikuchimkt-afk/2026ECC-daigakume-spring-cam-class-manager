@@ -2,7 +2,7 @@
 let sessionsInfo = [
     { id: 'day1',  date: '4/21(火)', title: 'Day 1' },
     { id: 'day2',  date: '4/22(水)', title: 'Day 2' },
-    { id: 'day3',  date: '4/24(木)', title: 'Day 3' },
+    { id: 'day3',  date: '4/23(木)', title: 'Day 3' },
     { id: 'day4',  date: '4/28(火)', title: 'Day 4' },
     { id: 'day5',  date: '4/29(水)', title: 'Day 5' },
     { id: 'day6',  date: '4/30(木)', title: 'Day 6' },
@@ -198,43 +198,40 @@ async function syncWithCloud() {
             processFormResponses(data.formResponses);
         }
 
-        // ★ 5. 旧ID(p_ext_)データの新ID(p_form_)マイグレーション
-        if (data.appData && Object.keys(data.appData).length > 0) {
-            const nameToNewId = {};
-            participantsList.forEach(p => { nameToNewId[p.name] = p.id; });
+        // ★ 4b. フォームから削除された参加者を除去（フォーム回答をSource of Truthとする）
+        // フォーム回答が存在する場合のみ実行（空の場合は安全のためスキップ）
+        if (data.formResponses && data.formResponses.length > 0) {
+            // ★ 名前の比較は「前後空白除去＋全角/半角空白畳み込み」で正規化して行う
+            const _normName = (s) => String(s || '').replace(/[\s　]+/g, ' ').trim();
+            const formNames = new Set();
+            data.formResponses.forEach(row => {
+                const nameKey = Object.keys(row).find(k => k.includes('氏名'));
+                if (nameKey) {
+                    const name = _normName(row[nameKey]);
+                    if (name) formNames.add(name);
+                }
+            });
 
-            Object.keys(data.appData).forEach(sessionId => {
-                const cloudParticipants = data.appData[sessionId]?.participants || {};
-                Object.keys(cloudParticipants).forEach(oldId => {
-                    if (!oldId.startsWith('p_ext_')) return;
-                    const pData = cloudParticipants[oldId];
-                    if (!pData.rpContent && !pData.apContent && !pData.rpScore && !pData.apScore && !pData.remarks) return;
-
-                    // フォーム行インデックスから名前を特定
-                    const match = oldId.match(/_(\d+)$/);
-                    if (match && data.formResponses) {
-                        const idx = parseInt(match[1]);
-                        if (idx < data.formResponses.length) {
-                            const row = data.formResponses[idx];
-                            const nameKey = Object.keys(row).find(k => k.includes('氏名'));
-                            if (nameKey) {
-                                const rawName = String(row[nameKey] || '').replace(/[\s　]+/g, ' ');
-                                const newId = nameToNewId[rawName];
-                                if (newId && newId !== oldId) {
-                                    if (!appData[sessionId]) appData[sessionId] = { generalHomework: '', generalNotes: '', participants: {} };
-                                    if (!appData[sessionId].participants[newId] ||
-                                        (!appData[sessionId].participants[newId].rpContent && !appData[sessionId].participants[newId].apContent)) {
-                                        appData[sessionId].participants[newId] = pData;
-                                    }
-                                }
-                            }
-                        }
+            // p_form_ IDの参加者で、現在のフォーム回答に存在しない人を除去
+            const removedNames = [];
+            participantsList = participantsList.filter(p => {
+                if (!p.id.startsWith('p_form_')) return true; // 手動追加(p_manual_)は保持
+                if (formNames.has(_normName(p.name))) return true; // フォームに存在する人は保持
+                // フォームから消えた人 → 全セッションから除去
+                Object.keys(appData).forEach(sessionId => {
+                    if (appData[sessionId] && appData[sessionId].participants && appData[sessionId].participants[p.id]) {
+                        delete appData[sessionId].participants[p.id];
                     }
                 });
+                removedNames.push(p.name);
+                return false; // participantsListからも除去
             });
+            if (removedNames.length > 0) {
+                console.log('[syncWithCloud] フォームから削除された参加者を除去:', removedNames);
+            }
         }
 
-        // ★ 6. 旧IDのゴミデータをクリーンアップ（participantsListがクラウドと同期された後で実行）
+        // ★ 5. 旧IDのゴミデータをクリーンアップ（participantsListに存在しないIDを除去）
         const validIds = new Set(participantsList.map(p => p.id));
         Object.keys(appData).forEach(sessionId => {
             if (appData[sessionId] && appData[sessionId].participants) {
@@ -313,23 +310,30 @@ function generateParticipantId(name, index) {
 }
 
 function processFormResponses(formResponses) {
+    // ★ 名前の正規化（前後空白除去＋全角/半角空白の畳み込み）
+    const _normName = (s) => String(s || '').replace(/[\s　]+/g, ' ').trim();
+
+    // ★ 同じ人が複数行にわたって申し込んでいる場合に、
+    //   「行Aで day1 を追加 → 行Bで day1 を削除」と打ち消し合うのを防ぐため、
+    //   まず名前単位で参加希望を集約する。
+    const aggregated = new Map(); // key: 正規化済みの名前 → { firstIndex, schoolYear, grade, rawAttendParts[], hasExplicitAttend }
+
     formResponses.forEach((row, i) => {
         const keys = Object.keys(row);
         let nameKey = keys.find(k => k.includes('氏名'));
         let yearKey = keys.find(k => k.includes('学年'));
         let gradeKey = keys.find(k => k.includes('級'));
-        let tabletKey = keys.find(k => k.includes('タブレット'));
         let attendKey = keys.find(k => k.includes('参加したい日') || k.includes('参加'));
 
         if (!nameKey) return;
-        
+
         const rawName = String(row[nameKey] || '');
         if (!rawName.trim()) return;
-        const name = rawName.replace(/[\s　]+/g, ' ');
+        const name = _normName(rawName);
 
         // ★ 削除済み参加者はスキップ（フォーム回答からの復活を防止）
         if (deletedParticipantNames.includes(name)) return;
-        
+
         const schoolYear = yearKey ? String(row[yearKey] || '') : '';
         const gradeStr = gradeKey ? String(row[gradeKey]) : '';
         let grade = '未選択';
@@ -341,31 +345,54 @@ function processFormResponses(formResponses) {
         else if (gradeStr.includes('2級')) grade = '2級';
         else if (gradeStr.includes('準1級')) grade = '準1級';
         else if (gradeStr.includes('1級')) grade = '1級';
-        
-        // ★ 大学前教室はタブレット持参が前提のため、常にtrue
-        const hasTablet = true;
+
         const rawAttend = attendKey ? String(row[attendKey] || '') : '';
 
-        // 新規か更新かを判定
-        let existing = participantsList.find(p => p.name === name);
+        if (!aggregated.has(name)) {
+            aggregated.set(name, {
+                firstIndex: i,
+                schoolYear: schoolYear,
+                grade: grade,
+                rawAttendParts: [],
+                hasExplicitAttend: false
+            });
+        }
+        const agg = aggregated.get(name);
+        // 学年・級は最初の行の値を優先（空のときは後の行で補完）
+        if (!agg.schoolYear && schoolYear) agg.schoolYear = schoolYear;
+        if ((!agg.grade || agg.grade === '未選択') && grade !== '未選択') agg.grade = grade;
+        if (rawAttend) {
+            agg.rawAttendParts.push(rawAttend);
+            agg.hasExplicitAttend = true;
+        }
+    });
+
+    // 集約済みの参加希望を基に、participantsList と appData を更新
+    aggregated.forEach((agg, name) => {
+        // ★ 既存検索も正規化したうえで比較（古いデータに空白が混じっていても一致させる）
+        let existing = participantsList.find(p => _normName(p.name) === name);
         if (!existing) {
             existing = {
-                id: generateParticipantId(name, i),
+                id: generateParticipantId(name, agg.firstIndex),
                 name: name,
-                grade: grade,
-                hasTablet: hasTablet,
-                schoolYear: schoolYear
+                grade: agg.grade,
+                hasTablet: true, // ★ 大学前教室はタブレット持参が前提
+                schoolYear: agg.schoolYear
             };
             participantsList.push(existing);
-            newParticipantIds.add(existing.id); // 新規としてマーク
+            newParticipantIds.add(existing.id);
         } else {
-            // ★ 既存ユーザーの編集を上書きしない（未入力のときだけフォーム値で補完）
-            if (!existing.grade || existing.grade === '未選択') existing.grade = grade;
-            if (existing.hasTablet === undefined) existing.hasTablet = hasTablet;
-            if (!existing.schoolYear) existing.schoolYear = schoolYear;
+            // 既存ユーザーの手動編集は上書きしない（未入力のときだけフォーム値で補完）
+            if (!existing.grade || existing.grade === '未選択') existing.grade = agg.grade;
+            if (existing.hasTablet === undefined) existing.hasTablet = true;
+            if (!existing.schoolYear) existing.schoolYear = agg.schoolYear;
+            // ★ 旧データで空白混じりで保存されていた名前をこの機会に正規化
+            if (existing.name !== name) existing.name = name;
         }
 
-        // 参加希望日に応じて日誌に割り当てる
+        const combinedRawAttend = agg.rawAttendParts.join(' , ');
+
+        // 全日程にわたって参加希望を反映
         Object.keys(appData).forEach(sessionId => {
             const sessionData = sessionsInfo.find(s => s.id === sessionId);
             if (!sessionData) return;
@@ -373,20 +400,20 @@ function processFormResponses(formResponses) {
             // ★ この日程から個別に除外された参加者はスキップ
             const excludedIds = appData[sessionId].excludedParticipantIds || [];
             if (excludedIds.includes(existing.id)) return;
-            
-            if (rawAttend) {
-                // 参加希望日の指定がある場合：マッチする日程だけに追加
+
+            if (agg.hasExplicitAttend) {
                 const dateStr = sessionData.date.substring(0, sessionData.date.indexOf('(') > -1 ? sessionData.date.indexOf('(') : sessionData.date.length);
-                const wantsToAttend = rawAttend.includes(dateStr);
-                
+                const wantsToAttend = combinedRawAttend.includes(dateStr);
+
                 if (wantsToAttend) {
                     if (!appData[sessionId].participants[existing.id]) {
                         appData[sessionId].participants[existing.id] = {
                             attended: true, rpContent: '', rpScore: '', apContent: '', apScore: '', remarks: ''
                         };
                     }
-                } else if (!wantsToAttend && appData[sessionId].participants[existing.id]) {
+                } else if (appData[sessionId].participants[existing.id]) {
                     const pData = appData[sessionId].participants[existing.id];
+                    // スコア・備考が未入力なら削除（フォームでの希望変更を反映）
                     if (!pData.rpScore && !pData.apScore && !pData.remarks) {
                         delete appData[sessionId].participants[existing.id];
                     }
@@ -1349,6 +1376,7 @@ function downloadExcel() {
 
 // ====== 診断機能（同期確認用） ======
 async function diagnoseCloudSync() {
+    const _normName = (s) => String(s || '').replace(/[\s　]+/g, ' ').trim();
     const lines = [];
     lines.push('=== クラウド同期 診断レポート ===');
     lines.push('時刻: ' + new Date().toLocaleString('ja-JP'));
@@ -1382,45 +1410,97 @@ async function diagnoseCloudSync() {
     lines.push('  参加者(ローカル): ' + participantsList.length + '名');
     lines.push('  日程(ローカル): ' + sessionsInfo.length + '件');
     lines.push('  日程データ: ' + Object.keys(appData).length + 'セッション');
+    lines.push('  削除済みリスト: ' + (deletedParticipantNames || []).length + '名');
     lines.push('');
 
-    // 3. テスト書き込み
-    lines.push('【3】テスト保存（現在の状態を送信）');
-    try {
-        const result = await saveToCloud({
-            appData: appData,
-            participantsList: participantsList,
-            sessionsInfo: sessionsInfo
+    // 3. ★ フォームと参加者リスト・削除済みリストの整合性チェック
+    lines.push('【3】フォーム⇔アプリの整合性チェック');
+    if (getData && Array.isArray(getData.formResponses)) {
+        const formNamesSet = new Set();
+        getData.formResponses.forEach(row => {
+            const nameKey = Object.keys(row).find(k => k.includes('氏名'));
+            if (nameKey) {
+                const n = _normName(row[nameKey]);
+                if (n) formNamesSet.add(n);
+            }
         });
-        lines.push('  ✓ POST成功: ' + JSON.stringify(result));
-    } catch (e) {
-        lines.push('  ✗ POST失敗: ' + e.message);
+        const formNames = Array.from(formNamesSet);
+        const listedNames = new Set(participantsList.map(p => _normName(p.name)));
+        const deletedSet = new Set((deletedParticipantNames || []).map(_normName));
+
+        lines.push('  フォームのユニーク氏名: ' + formNames.length + '名');
+        lines.push('  participantsListに存在: ' + participantsList.length + '名');
+        lines.push('');
+
+        // フォームにいるのに participantsList にいない人
+        const missingFromList = formNames.filter(n => !listedNames.has(n));
+        // その中で削除済みリストに入っている人（＝ブロックされている）
+        const blockedByDeleted = missingFromList.filter(n => deletedSet.has(n));
+        // 削除済みリストに入っているが、フォームには存在する人（復活すべき候補）
+        const shouldRecover = formNames.filter(n => deletedSet.has(n));
+
+        if (missingFromList.length > 0) {
+            lines.push('  ⚠ フォームにいるがアプリに反映されていない人:');
+            missingFromList.forEach(n => {
+                const flag = deletedSet.has(n) ? ' ← 【削除済みリストでブロック中】' : '';
+                lines.push('    ・' + n + flag);
+            });
+        } else {
+            lines.push('  ✓ フォーム氏名はすべてアプリに反映されています');
+        }
+        lines.push('');
+
+        if (shouldRecover.length > 0) {
+            lines.push('  🔧 復旧可能（削除済みリストから外せば再登場します）:');
+            shouldRecover.forEach(n => lines.push('    ・' + n));
+            lines.push('');
+            lines.push('  → サイドバー下の「削除リストをリセット」ボタンで一括復旧できます');
+        }
+
+        if ((deletedParticipantNames || []).length > 0) {
+            lines.push('');
+            lines.push('  削除済みリストの全内容:');
+            (deletedParticipantNames || []).forEach(n => lines.push('    ・' + n));
+        }
+    } else {
+        lines.push('  フォーム回答がクラウドから取得できなかったためスキップ');
     }
     lines.push('');
-
-    // 4. 書き込み直後の再取得
-    lines.push('【4】書き込み後の再GET（書き込まれたか検証）');
-    try {
-        const url2 = GAS_WEB_APP_URL + '?t=' + Date.now();
-        const res2 = await fetch(url2, { cache: 'no-store' });
-        const after = await res2.json();
-        lines.push('  クラウドの最終更新: ' + (after.lastUpdated || '(未保存)'));
-        if (after._meta) {
-            lines.push('  参加者(クラウド): ' + after._meta.participantsListCount + '名');
-            lines.push('  日程(クラウド): ' + after._meta.sessionsInfoCount + '件');
-        }
-        const matchParticipants = after._meta && after._meta.participantsListCount === participantsList.length;
-        const matchSessions = after._meta && after._meta.sessionsInfoCount === sessionsInfo.length;
-        lines.push('  参加者数一致: ' + (matchParticipants ? '✓' : '✗'));
-        lines.push('  日程数一致: ' + (matchSessions ? '✓' : '✗'));
-    } catch (e) {
-        lines.push('  ✗ 再GET失敗: ' + e.message);
-    }
 
     const report = lines.join('\n');
     console.log(report);
     alert(report);
     return report;
+}
+
+// ====== 削除済みリストのリセット（フォームから消した人の復旧用） ======
+async function resetDeletedParticipants() {
+    const count = (deletedParticipantNames || []).length;
+    if (count === 0) {
+        alert('削除済みリストは既に空です。');
+        return;
+    }
+    const preview = (deletedParticipantNames || []).slice(0, 10).map(n => '・' + n).join('\n')
+        + (count > 10 ? `\n…ほか ${count - 10} 名` : '');
+    const ok = confirm(
+        `削除済みリストを全て解除しますか？\n\n` +
+        `現在 ${count} 名が登録されています:\n${preview}\n\n` +
+        `解除するとこれらの氏名がフォーム回答に残っていれば、次回の同期で自動的に日誌に再登場します。\n` +
+        `（アプリに入力済みの成績・備考は削除されません）`
+    );
+    if (!ok) return;
+
+    deletedParticipantNames = [];
+    localStorage.setItem('eikenDaigakumaeDeleted', JSON.stringify(deletedParticipantNames));
+
+    // クラウドへ即同期 → その後、最新データを取り直してフォーム参加者を再反映
+    try {
+        await pushStateToCloud();
+        await syncWithCloud();
+        alert('削除済みリストをリセットし、フォーム参加者を再同期しました。\n日誌を確認してください。');
+    } catch (e) {
+        alert('リセットは完了しましたが、クラウド同期でエラーが発生しました:\n' + (e.message || e));
+    }
 }
 
 // 起動
