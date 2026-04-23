@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>英検勉強会 日誌管理（大学前）</title>
-    <link rel="stylesheet" href="style.css?v=20">
+    <link rel="stylesheet" href="style.css?v=22">
     <script>
         // ちらつき防止のため、ページレンダリング前にテーマを適用
         (function() {
@@ -55,8 +55,8 @@
                 <button class="btn" style="width: 100%; display: block; text-align: center; background-color: transparent; color: var(--text-sec); cursor: pointer; font-size: 11px; border: 1px dashed var(--border); margin-top: 10px;" onclick="diagnoseCloudSync()">
                     🔍 同期診断（開発者向け）
                 </button>
-                <button class="btn" style="width: 100%; display: block; text-align: center; background-color: transparent; color: var(--text-sec); cursor: pointer; font-size: 11px; border: 1px dashed var(--border); margin-top: 6px;" onclick="resetDeletedParticipants()" title="過去にアプリで「全日程から削除」した氏名リストを解除します。フォームに残っている人は次回同期で再表示されます。">
-                    🔧 削除リストをリセット
+                <button class="btn" style="width: 100%; display: block; text-align: center; background-color: transparent; color: var(--text-sec); cursor: pointer; font-size: 11px; border: 1px dashed var(--border); margin-top: 6px;" onclick="openRestoreModal()" title="過去にアプリで「全日程から削除」した氏名リストから、個別に選んで復帰できます。">
+                    🔧 削除リストから復帰（個別選択）
                 </button>
             </div>
         </aside>
@@ -144,11 +144,17 @@
     <div id="deleteModal" class="modal-overlay" style="display: none;">
         <div class="modal-content">
             <h3 style="margin-bottom: 12px; color: var(--text-main); font-size: 18px;">参加者の削除</h3>
-            <p id="deleteModalMessage" style="margin-bottom: 24px; font-size: 14px; line-height: 1.6;"></p>
-            <div style="display: flex; flex-direction: column; gap: 10px;">
-                <button type="button" class="btn" style="width:100%; background: var(--input-bg); color: var(--text-main); border: 1px solid var(--border);" onclick="deleteFromCurrentSession()">📅 この日のみ削除</button>
-                <button type="button" class="btn" style="width:100%; background: var(--danger); color: white; border: none;" onclick="deleteFromAllSessions()">🗑️ 全日程から完全に削除</button>
-                <button type="button" class="btn" style="width:100%; background: transparent; color: var(--text-sec); border: none;" onclick="closeDeleteModal()">キャンセル</button>
+            <p id="deleteModalMessage" style="margin-bottom: 20px; font-size: 14px; line-height: 1.6;"></p>
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                <div>
+                    <button type="button" class="btn" style="width:100%; background: var(--input-bg); color: var(--text-main); border: 1px solid var(--border);" onclick="deleteFromCurrentSession()">📅 この日のみ削除</button>
+                    <p style="font-size: 11px; color: var(--text-sec); margin: 4px 2px 0; line-height: 1.5;">この日から除外し、以降フォームを再同期しても<strong>この日だけは戻りません</strong>（他の日程には影響しません）。</p>
+                </div>
+                <div>
+                    <button type="button" class="btn" style="width:100%; background: var(--danger); color: white; border: none;" onclick="deleteFromAllSessions()">🗑️ 全日程から削除</button>
+                    <p style="font-size: 11px; color: var(--text-sec); margin: 4px 2px 0; line-height: 1.5;">参加者リストと全日程から削除します。<strong>フォーム回答が残っていれば、次回同期で空のスコアで再登場します</strong>（＝同じ人に入力し直してもらう運用向け）。完全に消したい場合はスプシの行も削除してください。</p>
+                </div>
+                <button type="button" class="btn" style="width:100%; background: transparent; color: var(--text-sec); border: none; margin-top: 4px;" onclick="closeDeleteModal()">キャンセル</button>
             </div>
         </div>
     </div>
@@ -197,6 +203,25 @@
         </div>
     </div>
 
+    <!-- 削除済みリストからの個別復帰モーダル -->
+    <div id="restoreModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content" style="max-width: 520px;">
+            <h3 style="margin-bottom: 6px; color: var(--text-main); font-size: 18px;">🔧 削除済みリストから復帰</h3>
+            <p style="font-size: 12px; color: var(--text-sec); margin-bottom: 10px;">
+                チェックを付けた氏名を削除済みリストから外します。<span id="restoreCount" style="margin-left: 6px; font-weight: 600;"></span>
+            </p>
+            <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+                <button type="button" class="btn" style="font-size: 12px; padding: 4px 10px; background: var(--input-bg); color: var(--text-main); border: 1px solid var(--border);" onclick="toggleAllRestoreSelection(true)">すべて選択</button>
+                <button type="button" class="btn" style="font-size: 12px; padding: 4px 10px; background: var(--input-bg); color: var(--text-main); border: 1px solid var(--border);" onclick="toggleAllRestoreSelection(false)">すべて解除</button>
+            </div>
+            <div id="restoreList" style="max-height: 45vh; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px; margin-bottom: 14px;"></div>
+            <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                <button type="button" class="btn" style="background: transparent; color: var(--text-sec);" onclick="closeRestoreModal()">キャンセル</button>
+                <button type="button" class="btn primary-btn" onclick="executeRestore()">選択した氏名を復帰</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Loading Overlay -->
     <div id="loadingOverlay" class="loading-overlay">
         <div class="spinner"></div>
@@ -205,6 +230,6 @@
 
     <!-- Scripts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="app.js?v=20"></script>
+    <script src="app.js?v=22"></script>
 </body>
 </html>

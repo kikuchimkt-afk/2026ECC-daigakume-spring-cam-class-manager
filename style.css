@@ -798,3 +798,43 @@ input:checked + .slider:before {
     border-radius: 10px;
     flex-shrink: 0;
 }
+
+/* ====== 削除済みリスト復帰モーダル ====== */
+.restore-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s;
+    user-select: none;
+}
+.restore-item:hover {
+    background: var(--input-bg);
+}
+.restore-item + .restore-item {
+    border-top: 1px solid var(--border);
+}
+.restore-item .restore-check {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+.restore-item .restore-name {
+    font-weight: 600;
+    color: var(--text-main);
+    min-width: 120px;
+    flex-shrink: 0;
+}
+.restore-item .restore-badge {
+    font-size: 11px;
+    color: var(--text-sec);
+    flex: 1;
+    text-align: right;
+}
+.restore-item.in-form .restore-badge {
+    color: var(--success, #10b981);
+    font-weight: 600;
+}

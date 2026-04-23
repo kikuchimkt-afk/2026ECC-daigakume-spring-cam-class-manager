@@ -804,17 +804,15 @@ function deleteFromCurrentSession() {
 }
 
 // 全日程から削除
+// ★ 仕様: 現在の状態（participantsList と全日程のappData）からこの人を消すだけ。
+//        deletedParticipantNames には追加しない。
+//        フォーム回答にまだ行が残っていれば、次回同期時に空のスコアで再登場する。
+//        完全に消したい場合は別途スプシの行も削除する必要がある。
 function deleteFromAllSessions() {
     if (!participantToDelete) return;
     const id = participantToDelete;
 
-    // ★ 削除済みリストに名前を追加（フォーム再処理で復活を防止）
-    const pToDelete = participantsList.find(x => x.id === id);
-    if (pToDelete && !deletedParticipantNames.includes(pToDelete.name)) {
-        deletedParticipantNames.push(pToDelete.name);
-    }
-
-    // 参加者リストから完全削除
+    // 参加者リストから削除
     participantsList = participantsList.filter(x => x.id !== id);
 
     // 全日程のデータから削除
@@ -826,7 +824,6 @@ function deleteFromAllSessions() {
 
     localStorage.setItem('eikenDaigakumaeParticipants', JSON.stringify(participantsList));
     localStorage.setItem('eikenDaigakumaeData', JSON.stringify(appData));
-    localStorage.setItem('eikenDaigakumaeDeleted', JSON.stringify(deletedParticipantNames));
     closeDeleteModal();
     renderMainContent();
     // ★ クラウドへも同期
@@ -1473,33 +1470,103 @@ async function diagnoseCloudSync() {
     return report;
 }
 
-// ====== 削除済みリストのリセット（フォームから消した人の復旧用） ======
-async function resetDeletedParticipants() {
-    const count = (deletedParticipantNames || []).length;
-    if (count === 0) {
+// ====== 削除済みリストから選択的に復帰 ======
+async function openRestoreModal() {
+    const list = deletedParticipantNames || [];
+    if (list.length === 0) {
         alert('削除済みリストは既に空です。');
         return;
     }
-    const preview = (deletedParticipantNames || []).slice(0, 10).map(n => '・' + n).join('\n')
-        + (count > 10 ? `\n…ほか ${count - 10} 名` : '');
-    const ok = confirm(
-        `削除済みリストを全て解除しますか？\n\n` +
-        `現在 ${count} 名が登録されています:\n${preview}\n\n` +
-        `解除するとこれらの氏名がフォーム回答に残っていれば、次回の同期で自動的に日誌に再登場します。\n` +
-        `（アプリに入力済みの成績・備考は削除されません）`
-    );
-    if (!ok) return;
 
-    deletedParticipantNames = [];
+    // フォーム回答の最新氏名を取得（「フォームにまだ存在する＝復帰で日誌に再登場する」の判定用）
+    showLoading('フォーム回答を取得中...');
+    let formNames = new Set();
+    try {
+        const url = GAS_WEB_APP_URL + (GAS_WEB_APP_URL.includes('?') ? '&' : '?') + 't=' + Date.now();
+        const res = await fetch(url, { cache: 'no-store' });
+        const data = await res.json();
+        const _normName = (s) => String(s || '').replace(/[\s　]+/g, ' ').trim();
+        if (Array.isArray(data.formResponses)) {
+            data.formResponses.forEach(row => {
+                const nameKey = Object.keys(row).find(k => k.includes('氏名'));
+                if (nameKey) {
+                    const n = _normName(row[nameKey]);
+                    if (n) formNames.add(n);
+                }
+            });
+        }
+    } catch (e) {
+        console.warn('フォーム回答の取得に失敗:', e);
+    } finally {
+        hideLoading();
+    }
+
+    // モーダル内にチェックボックス付きのリストを描画
+    const container = document.getElementById('restoreList');
+    container.innerHTML = '';
+    list.forEach((name, idx) => {
+        const inForm = formNames.has(name);
+        const row = document.createElement('label');
+        row.className = 'restore-item' + (inForm ? ' in-form' : '');
+        row.innerHTML = `
+            <input type="checkbox" class="restore-check" data-index="${idx}" ${inForm ? 'checked' : ''}>
+            <span class="restore-name">${name}</span>
+            <span class="restore-badge">${inForm ? '📥 フォームに存在（復帰で日誌に再登場）' : '📭 フォームからも削除済み（復帰しても日誌に戻らない）'}</span>
+        `;
+        container.appendChild(row);
+    });
+
+    document.getElementById('restoreCount').textContent = `計 ${list.length} 名`;
+    document.getElementById('restoreModal').style.display = 'flex';
+}
+
+function closeRestoreModal() {
+    document.getElementById('restoreModal').style.display = 'none';
+}
+
+function toggleAllRestoreSelection(checked) {
+    document.querySelectorAll('#restoreList .restore-check').forEach(cb => {
+        cb.checked = checked;
+    });
+}
+
+async function executeRestore() {
+    const checks = document.querySelectorAll('#restoreList .restore-check');
+    const selectedIndices = [];
+    checks.forEach(cb => {
+        if (cb.checked) selectedIndices.push(parseInt(cb.dataset.index));
+    });
+    if (selectedIndices.length === 0) {
+        alert('復帰する氏名を選択してください。');
+        return;
+    }
+
+    const selectedSet = new Set(selectedIndices);
+    const restoredNames = [];
+    const remaining = [];
+    (deletedParticipantNames || []).forEach((name, idx) => {
+        if (selectedSet.has(idx)) {
+            restoredNames.push(name);
+        } else {
+            remaining.push(name);
+        }
+    });
+
+    deletedParticipantNames = remaining;
     localStorage.setItem('eikenDaigakumaeDeleted', JSON.stringify(deletedParticipantNames));
 
-    // クラウドへ即同期 → その後、最新データを取り直してフォーム参加者を再反映
+    closeRestoreModal();
+
     try {
         await pushStateToCloud();
         await syncWithCloud();
-        alert('削除済みリストをリセットし、フォーム参加者を再同期しました。\n日誌を確認してください。');
+        alert(
+            `${restoredNames.length} 名を削除済みリストから復帰しました:\n` +
+            restoredNames.map(n => '・' + n).join('\n') +
+            `\n\nフォームに存在する人は日誌に再登場しています。日誌を確認してください。`
+        );
     } catch (e) {
-        alert('リセットは完了しましたが、クラウド同期でエラーが発生しました:\n' + (e.message || e));
+        alert('復帰しましたが、クラウド同期でエラーが発生しました:\n' + (e.message || e));
     }
 }
 
